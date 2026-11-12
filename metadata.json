@@ -1,0 +1,6 @@
+{
+  "name": "Mi Segundo Cerebro 4.0",
+  "description": "Sistema operativo personal y empresarial integral de alto rendimiento basado en 5 dimensiones de crecimiento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
