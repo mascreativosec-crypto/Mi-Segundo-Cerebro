@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppNotification } from '../../types';
-import { Bell, X, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 
 interface NotificationsModalProps {
   isOpen: boolean;
@@ -20,34 +20,36 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="w-full max-w-md rounded-2xl bg-[#0c1812] border border-emerald-500/30 p-5 shadow-2xl shadow-emerald-950/60 animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between pb-3 border-b border-emerald-500/15 mb-4">
-          <div className="flex items-center gap-2">
-            <Bell className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white tracking-tight">Centro de Notificaciones</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.1] p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/[0.08] mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <Bell className="w-4 h-4" />
+            </div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Centro de Notificaciones</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex items-center justify-between text-xs mb-3 text-slate-400">
+        <div className="flex items-center justify-between text-xs mb-3 text-slate-500 dark:text-slate-400">
           <span>{notifications.length} Avisos Registrados</span>
           <div className="flex items-center gap-2">
             <button
               onClick={onMarkAllAsRead}
-              className="text-emerald-400 hover:underline cursor-pointer text-[11px]"
+              className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer text-[11px] font-semibold"
             >
               Marcar Leídas
             </button>
             <span>·</span>
             <button
               onClick={onClearNotifications}
-              className="text-red-400 hover:underline cursor-pointer text-[11px]"
+              className="text-rose-500 hover:underline cursor-pointer text-[11px] font-semibold"
             >
               Limpiar
             </button>
@@ -56,27 +58,27 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
 
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {notifications.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-500">
+            <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">
               No tienes notificaciones pendientes.
             </div>
           ) : (
             notifications.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-3 rounded-xl border text-xs space-y-1 transition-all ${
+                className={`p-3.5 rounded-2xl border text-xs space-y-1 transition-all ${
                   notif.read
-                    ? 'bg-[#08100c]/60 border-slate-900 text-slate-400'
-                    : 'bg-[#08100c] border-emerald-500/30 text-slate-200'
+                    ? 'bg-slate-50 dark:bg-black/20 border-slate-200 dark:border-white/[0.04] text-slate-500 dark:text-slate-400'
+                    : 'bg-blue-50/60 dark:bg-blue-950/20 border-blue-500/20 text-slate-800 dark:text-slate-200'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                     {notif.title}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-500">{notif.timestamp}</span>
+                  <span className="text-[10px] font-medium text-slate-400">{notif.timestamp}</span>
                 </div>
-                <p className="text-[11px] text-slate-300 leading-snug">{notif.message}</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">{notif.message}</p>
               </div>
             ))
           )}

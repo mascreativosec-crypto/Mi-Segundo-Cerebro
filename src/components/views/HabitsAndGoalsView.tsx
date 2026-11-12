@@ -315,17 +315,11 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
             <Flame className="w-7 h-7 stroke-[2.5]" />
           </div>
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Hábitos & Metas 4.0</h1>
-              <span className="text-xs font-mono text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2.5 py-0.5 rounded-md border border-rose-500/20 font-bold">
-                MATRIZ 28 DÍAS
-              </span>
-              <span className="text-xs font-mono text-amber-600 dark:text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-md border border-amber-500/30">
-                TEMPORIZADOR ZEN
-              </span>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl">
-              Arquitectura de cambio de conducta: microhábitos de 1 a 5 minutos, matriz de consistencia de 4 semanas (28 días) y horizontes estratégicos de metas.
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Hábitos & Metas
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
+              Arquitectura de cambio de conducta: microhábitos de 1 a 5 minutos, matriz de consistencia de 28 días y horizontes estratégicos.
             </p>
           </div>
         </div>
@@ -506,28 +500,28 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                     {/* Top Badges & Streak */}
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg border font-bold uppercase ${getPillarColorBadge(habit.pillar)}`}>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-bold uppercase ${getPillarColorBadge(habit.pillar)}`}>
                           {habit.pillar}
                         </span>
                         {isMicro ? (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
+                          <span className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
                             <Clock className="w-2.5 h-2.5 text-amber-500" />
                             <span>{durationMins}m Micro</span>
                           </span>
                         ) : (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700">
+                          <span className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-semibold">
                             {durationMins}m
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 text-xs font-mono font-bold text-amber-500">
+                        <div className="flex items-center gap-1 text-xs font-bold text-amber-500">
                           <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
                           <span>{habit.currentStreak}d</span>
                         </div>
                         {habit.bestStreak > 0 && (
-                          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500" title={`Mejor Racha: ${habit.bestStreak} días`}>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium" title={`Mejor Racha: ${habit.bestStreak} días`}>
                             (max {habit.bestStreak}d)
                           </span>
                         )}
@@ -563,7 +557,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                   {/* MATRIZ DE CONSISTENCIA (ÚLTIMOS 28 DÍAS) */}
                   <div className="pt-3 border-t border-slate-200/80 dark:border-white/[0.08] space-y-2.5">
                     {/* Matrix Quantitative Header */}
-                    <div className="flex items-center justify-between text-[11px] font-mono">
+                    <div className="flex items-center justify-between text-[11px]">
                       <div className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-bold">
                         <Calendar className="w-3.5 h-3.5 text-blue-500 dark:text-blue-400" />
                         <span>Matriz 28 Días</span>
@@ -581,7 +575,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                     {/* 4x7 Interactive Matrix Grid */}
                     <div className="space-y-1">
                       {/* Weekday indicator labels */}
-                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-mono text-slate-400 dark:text-slate-500 font-semibold select-none">
+                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] text-slate-400 dark:text-slate-500 font-semibold select-none">
                         <span>L</span>
                         <span>M</span>
                         <span>X</span>
@@ -604,7 +598,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                                 handleToggleHabitDate(habit.id, day.dateStr);
                               }}
                               title={`${day.dateStr}: ${isDone ? 'Completado (Click para alternar)' : 'Pendiente (Click para marcar)'}`}
-                              className={`h-7 rounded-lg flex flex-col items-center justify-center text-[9px] font-mono transition-all cursor-pointer border ${
+                              className={`h-7 rounded-lg flex flex-col items-center justify-center text-[9px] font-medium transition-all cursor-pointer border ${
                                 isDone
                                   ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs'
                                   : day.isToday
@@ -709,10 +703,10 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                   className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 uppercase font-bold">
+                    <span className="text-[10px] px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 uppercase font-bold">
                       {goal.horizon.replace('_', ' ')}
                     </span>
-                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                       Límite: {goal.targetDate}
                     </span>
                   </div>
@@ -723,8 +717,8 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
 
                   {/* Progress Bar */}
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-500 dark:text-slate-400">Progreso</span>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Progreso</span>
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">
                         {goal.progressPercent}%
                       </span>
@@ -740,7 +734,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                   {/* Milestones Checklist */}
                   {goal.milestones.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-white/[0.06]">
-                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 block font-bold uppercase">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-bold uppercase">
                         Hitos ({doneMilestones}/{goal.milestones.length}):
                       </span>
                       <div className="space-y-1.5">
@@ -787,8 +781,8 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
             </button>
 
             <div>
-              <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 uppercase font-bold tracking-wider">
-                TEMPORIZADOR ZEN DE HÁBITO
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase font-bold tracking-wider">
+                Temporizador Zen de Hábito
               </span>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight mt-1">
                 {activeTimerHabit.title}
@@ -825,10 +819,10 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
               </svg>
 
               <div className="absolute flex flex-col items-center">
-                <span className="text-4xl font-mono font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
                   {formatTimer(timerSecondsLeft)}
                 </span>
-                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold">
                   {timerProgress}% completado
                 </span>
               </div>
@@ -926,7 +920,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                     setNewHabitMinutes(m);
                     setNewHabitIsMicro(m <= 5);
                   }}
-                  className="w-full bg-slate-100 dark:bg-black/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono"
+                  className="w-full bg-slate-100 dark:bg-black/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-sans"
                 />
               </div>
             </div>
@@ -1038,7 +1032,7 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                 type="date"
                 value={newGoalTargetDate}
                 onChange={(e) => setNewGoalTargetDate(e.target.value)}
-                className="w-full bg-slate-100 dark:bg-black/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono"
+                className="w-full bg-slate-100 dark:bg-black/50 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-sans"
               />
             </div>
 

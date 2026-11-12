@@ -189,132 +189,114 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Header - Apple Liquid Glass Midnight Indigo */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-purple-500/30 shadow-lg dark:shadow-2xl">
-        {/* Brand Lockup */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-400 flex items-center justify-center text-white font-extrabold shadow-lg shadow-purple-500/25">
-            <Moon className="w-6 h-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <span className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Super Noche</span>
-          </div>
-        </div>
-
-        {/* Sub-tabs Navigation (Mirror of Super Mañana) */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-200/50 dark:bg-black/40 backdrop-blur-md border border-slate-300/40 dark:border-white/[0.06] rounded-2xl overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('routine')}
-            className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'routine'
-                ? 'bg-purple-500/25 text-purple-800 dark:text-purple-200 border border-purple-500/40 shadow-xs'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Mi Rutina
-          </button>
-          <button
-            onClick={() => setActiveTab('builder')}
-            className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'builder'
-                ? 'bg-purple-500/25 text-purple-800 dark:text-purple-200 border border-purple-500/40 shadow-xs'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Personalizar
-          </button>
-          <button
-            onClick={() => setActiveTab('progress')}
-            className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'progress'
-                ? 'bg-purple-500/25 text-purple-800 dark:text-purple-200 border border-purple-500/40 shadow-xs'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Progreso
-          </button>
-          <button
-            onClick={() => setActiveTab('prep')}
-            className={`px-4 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === 'prep'
-                ? 'bg-purple-500/25 text-purple-800 dark:text-purple-200 border border-purple-500/40 shadow-xs'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            Preparación de Mañana
-          </button>
-        </div>
-
-        {/* Right side widgets: streak, morning bridge, comenzar CTA */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-800 dark:text-purple-300 font-bold text-xs shadow-sm">
-            <Flame className="w-4 h-4 fill-purple-500 text-purple-500" />
-            <span>{currentStreak} {currentStreak === 1 ? 'noche' : 'noches'}</span>
-          </div>
-
-          {onNavigateToSuperMorning && (
-            <button
-              onClick={onNavigateToSuperMorning}
-              className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 transition-colors cursor-pointer"
-              title="Ir a Súper Mañana"
-            >
-              <Sun className="w-4 h-4" />
-            </button>
-          )}
-
-          <button
-            onClick={() => setShowGuidedModal(true)}
-            className="px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-500 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-900/30 flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Comenzar</span>
-          </button>
-        </div>
-      </div>
-
-      {/* TAB 1: MI RUTINA (Deep Introspection & Conscience) */}
-      {activeTab === 'routine' && (
-        <div className="space-y-6">
-          {/* Formula Strip */}
-          <div className="p-4 rounded-2xl backdrop-blur-xl bg-white/70 dark:bg-black/60 border border-purple-500/25 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+      {/* Top Header & Overview - Unified Single Apple Liquid Glass Block */}
+      <div className="p-6 md:p-7 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-purple-500/30 shadow-lg dark:shadow-2xl space-y-6">
+        {/* Top Control Bar: Brand & Tabs */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-5">
+          {/* Brand Lockup */}
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-purple-400 flex items-center justify-center text-white font-extrabold shadow-lg shadow-purple-500/25 shrink-0">
+              <Moon className="w-6 h-6 stroke-[2.2]" />
+            </div>
             <div>
-              <span className="text-xs font-semibold text-purple-700 dark:text-purple-400 tracking-wide block">
-                Fórmula de Rendición de Cuentas
-              </span>
-              <p className="text-xs text-slate-700 dark:text-slate-200 font-medium mt-0.5">
-                Espiritual + Emocional + Físico + Intelectual + Financiero ={' '}
-                <strong className="text-purple-700 dark:text-purple-300">Paz Interior & Rectificación</strong>
-              </p>
-            </div>
-
-            <div className="text-right">
-              <p className="text-xs italic text-slate-500 dark:text-slate-400 font-serif">
-                "La almohada es el juez más severo: quien actuó con honor, duerme en paz."
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Super Noche
+              </h1>
+              <p className="flex flex-wrap items-center gap-1.5 mt-2 text-xs text-slate-600 dark:text-slate-300">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shadow-2xs">
+                  Espiritual
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold text-xs">+</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shadow-2xs">
+                  Emocional
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold text-xs">+</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shadow-2xs">
+                  Físico
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold text-xs">+</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shadow-2xs">
+                  Intelectual
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold text-xs">+</span>
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-white/[0.08] shadow-2xs">
+                  Financiero
+                </span>
+                <span className="text-slate-400 dark:text-slate-500 font-bold text-xs">=</span>
+                <strong className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 shadow-2xs">
+                  Paz Interior & Rectificación
+                </strong>
               </p>
             </div>
           </div>
 
-          {/* Welcome & Rating Card */}
-          <div className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-purple-500/30 shadow-xl space-y-6">
+          {/* Sub-tabs Navigation - spacious without scrollbar */}
+          <div className="w-full xl:w-auto sm:min-w-[480px] grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-slate-100/90 dark:bg-black/40 backdrop-blur-md border border-slate-200/80 dark:border-white/[0.06] rounded-2xl">
+            <button
+              onClick={() => setActiveTab('routine')}
+              className={`w-full py-2.5 px-3 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center ${
+                activeTab === 'routine'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Mi Rutina
+            </button>
+            <button
+              onClick={() => setActiveTab('builder')}
+              className={`w-full py-2.5 px-3 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center ${
+                activeTab === 'builder'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Personalizar
+            </button>
+            <button
+              onClick={() => setActiveTab('progress')}
+              className={`w-full py-2.5 px-3 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center ${
+                activeTab === 'progress'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Progreso
+            </button>
+            <button
+              onClick={() => setActiveTab('prep')}
+              className={`w-full py-2.5 px-3 text-xs font-semibold rounded-xl transition-all cursor-pointer text-center ${
+                activeTab === 'prep'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40 font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Preparación de Mañana
+            </button>
+          </div>
+        </div>
+
+        {/* Integrated Introspection & Stats Section inside the same block */}
+        {activeTab === 'routine' && (
+          <div className="pt-5 border-t border-slate-200/80 dark:border-white/[0.06] space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-purple-700 dark:text-purple-300 mb-1">
                   <Calendar className="w-3.5 h-3.5" />
                   <span>{formattedToday} · Cierre de Jornada</span>
                 </div>
 
-                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                   Introspección & Autogobierno
                 </h2>
 
-                <p className="text-xs italic text-slate-500 dark:text-slate-300 mt-1">
-                  "No te acuestes con autoengaños; examina tus actos y rectifica tu rumbo."
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Examina tus actos, celebra tus victorias y rectifica tu rumbo.
                 </p>
               </div>
 
               {/* Day Rating with 5 Stars */}
-              <div className="p-3 rounded-2xl bg-slate-100/80 dark:bg-black/40 border border-purple-500/30 flex flex-col items-end">
-                <span className="text-xs font-medium text-purple-700 dark:text-purple-300 mb-1">Evaluación del Día</span>
+              <div className="p-3 rounded-2xl bg-slate-100/80 dark:bg-white/[0.03] border border-purple-500/25 flex flex-col items-end">
+                <span className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 mb-1">Evaluación del Día</span>
                 <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
@@ -323,7 +305,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
                       className="p-1 hover:scale-110 transition-transform cursor-pointer"
                     >
                       <Star
-                        className={`w-5 h-5 ${
+                        className={`w-4 h-4 ${
                           star <= review.dayRating ? 'text-amber-500 fill-amber-500' : 'text-slate-300 dark:text-slate-700'
                         }`}
                       />
@@ -333,31 +315,37 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
               </div>
             </div>
 
-            {/* 3 Metric Stats */}
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-200/80 dark:border-white/[0.08]">
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Racha Nocturna</span>
-                <span className="text-2xl font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 mt-1 tracking-tight">
-                  <Flame className="w-5 h-5 fill-purple-500 text-purple-500" />
+            {/* 3 Metric Stats Cards */}
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              <div className="p-3.5 rounded-2xl bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.05]">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Racha Nocturna</span>
+                <span className="text-lg md:text-xl font-extrabold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 mt-0.5 tracking-tight">
+                  <Flame className="w-4 h-4 fill-purple-500 text-purple-500" />
                   {currentStreak} {currentStreak === 1 ? 'noche' : 'noches'}
                 </span>
               </div>
 
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Récord</span>
-                <span className="text-2xl font-bold text-slate-900 dark:text-white mt-1 tracking-tight block">
+              <div className="p-3.5 rounded-2xl bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.05]">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Récord</span>
+                <span className="text-lg md:text-xl font-extrabold text-slate-900 dark:text-white mt-0.5 tracking-tight block">
                   {bestStreak} noches
                 </span>
               </div>
 
-              <div>
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Meta de Sueño</span>
-                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-1 tracking-tight block">
+              <div className="p-3.5 rounded-2xl bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.05]">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Meta de Sueño</span>
+                <span className="text-lg md:text-xl font-extrabold text-indigo-700 dark:text-indigo-300 mt-0.5 tracking-tight block">
                   {review.plannedSleepHours || 7.5} horas
                 </span>
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* TAB 1: MI RUTINA (Deep Introspection & Conscience) */}
+      {activeTab === 'routine' && (
+        <div className="space-y-6">
 
           {/* Time Selector Card with Sleep Target Clock */}
           <div className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-xl space-y-6">
@@ -603,11 +591,11 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
                 >
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-rose-500 dark:text-rose-400 font-bold">Fracaso #{idx + 1}:</span>
+                      <span className="font-bold text-rose-500 dark:text-rose-400">Fracaso #{idx + 1}:</span>
                       <span className="text-slate-800 dark:text-slate-200 font-medium">{pair.failure}</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                      <span className="font-mono text-purple-700 dark:text-purple-300 font-bold">Solución:</span>
+                      <span className="font-bold text-purple-700 dark:text-purple-300">Solución:</span>
                       <span className="text-purple-900 dark:text-purple-200/90">{pair.solution}</span>
                     </div>
                   </div>
@@ -636,7 +624,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
                 </div>
               </div>
 
-              <span className="text-xs font-mono font-bold text-purple-800 dark:text-purple-300 bg-purple-500/15 dark:bg-purple-500/20 px-2.5 py-1 rounded-xl border border-purple-500/30">
+              <span className="text-xs font-bold text-purple-800 dark:text-purple-300 bg-purple-500/15 dark:bg-purple-500/20 px-3 py-1 rounded-full border border-purple-500/30">
                 {verbalItems.filter((i) => i.checked).length} / {verbalItems.length} cumplidos
               </span>
             </div>
@@ -703,7 +691,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-sm font-mono font-extrabold text-purple-800 dark:text-purple-300 bg-purple-500/20 px-3 py-1 rounded-xl border border-purple-500/30 tabular-nums">
+                <span className="text-sm font-extrabold text-purple-800 dark:text-purple-300 bg-purple-500/20 px-3 py-1 rounded-xl border border-purple-500/30">
                   {subconsciousCount} / 30
                 </span>
                 <button
@@ -738,7 +726,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
                 }`}
               >
                 <Moon className="w-6 h-6 mb-1" />
-                <span className="text-lg font-mono font-extrabold tabular-nums">
+                <span className="text-xl font-extrabold tracking-tight">
                   {subconsciousCount}/30
                 </span>
                 <span className="text-[9px] uppercase tracking-wider font-semibold opacity-80">
@@ -781,6 +769,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
           habits={habits}
           onUpdateHabits={(updated) => onUpdate({ ...review, customHabits: updated })}
           onResetDefaults={() => onUpdate({ ...review, customHabits: SUPER_NOCHE_HABITS })}
+          theme="purple"
         />
       )}
 
@@ -790,6 +779,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
           logs={review.nightLogs || []}
           currentStreak={currentStreak}
           bestStreak={bestStreak}
+          theme="purple"
         />
       )}
 

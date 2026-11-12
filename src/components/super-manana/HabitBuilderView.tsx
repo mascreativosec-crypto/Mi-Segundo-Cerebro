@@ -19,13 +19,16 @@ interface HabitBuilderViewProps {
   habits: SuperMorningHabit[];
   onUpdateHabits: (habits: SuperMorningHabit[]) => void;
   onResetDefaults: () => void;
+  theme?: 'amber' | 'purple';
 }
 
 export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
   habits,
   onUpdateHabits,
   onResetDefaults,
+  theme = 'amber',
 }) => {
+  const isPurple = theme === 'purple';
   const [editingHabit, setEditingHabit] = useState<SuperMorningHabit | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -116,21 +119,27 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner Card matching image_0a4bce81.png */}
-      <div className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-amber-500/25 shadow-lg dark:shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-6">
+      {/* Top Banner Card */}
+      <div className={`p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border shadow-lg dark:shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-6 ${
+        isPurple ? 'border-slate-200/80 dark:border-purple-500/30' : 'border-slate-200/80 dark:border-amber-500/25'
+      }`}>
         <div>
-          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">
+          <div className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-1 ${
+            isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'
+          }`}>
             <Sliders className="w-3.5 h-3.5" />
-            <span>Constructor Libre de Hábitos y Campos</span>
+            <span>{isPurple ? 'Constructor de Fases Nocturnas y Registros' : 'Constructor Libre de Hábitos y Campos'}</span>
           </div>
 
           <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Personaliza tus Hábitos y Registros
+            {isPurple ? 'Personaliza tus Fases y Registros Nocturnos' : 'Personaliza tus Hábitos y Registros'}
           </h2>
 
           <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 max-w-xl">
             Crea, reordena y selecciona qué actividades requieren campos para llenar. Base:{' '}
-            <strong className="text-amber-600 dark:text-amber-400 font-mono text-sm">{totalBaseMinutes} min</strong>.
+            <strong className={`font-bold text-sm ${isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {totalBaseMinutes} min
+            </strong>.
           </p>
         </div>
 
@@ -139,68 +148,96 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowTemplates(!showTemplates)}
-              className="px-4 py-2.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+              className={`px-4 py-2.5 rounded-2xl border font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                isPurple
+                  ? 'bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 text-purple-700 dark:text-purple-300'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-800 dark:text-amber-300'
+              }`}
             >
               <BookOpen className="w-4 h-4" />
               <span>Plantillas</span>
             </button>
 
             {showTemplates && (
-              <div className="absolute right-0 mt-2 w-56 rounded-2xl backdrop-blur-2xl bg-white/95 dark:bg-slate-900/95 border border-amber-500/30 shadow-2xl p-2 z-30 space-y-1">
+              <div className={`absolute right-0 mt-2 w-56 rounded-2xl backdrop-blur-2xl bg-white/95 dark:bg-slate-900/95 border shadow-2xl p-2 z-30 space-y-1 ${
+                isPurple ? 'border-purple-500/30' : 'border-amber-500/30'
+              }`}>
                 <button
                   onClick={() => applyTemplate('full')}
-                  className="w-full text-left p-2 rounded-xl text-xs text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+                  className={`w-full text-left p-2 rounded-xl text-xs transition-colors ${
+                    isPurple
+                      ? 'text-slate-700 dark:text-slate-200 hover:bg-purple-500/15 hover:text-purple-700 dark:hover:text-purple-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300'
+                  }`}
                 >
-                  <strong className="block text-slate-900 dark:text-white">Guía Maestra (13 Fases)</strong>
+                  <strong className="block text-slate-900 dark:text-white">Guía Maestra ({isPurple ? '8 Fases' : '13 Fases'})</strong>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">La experiencia completa</span>
                 </button>
                 <button
                   onClick={() => applyTemplate('minimal')}
-                  className="w-full text-left p-2 rounded-xl text-xs text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+                  className={`w-full text-left p-2 rounded-xl text-xs transition-colors ${
+                    isPurple
+                      ? 'text-slate-700 dark:text-slate-200 hover:bg-purple-500/15 hover:text-purple-700 dark:hover:text-purple-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300'
+                  }`}
                 >
-                  <strong className="block text-slate-900 dark:text-white">Ninja Esencial (5 Fases)</strong>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Hidratación, Vipassana, Dominó</span>
+                  <strong className="block text-slate-900 dark:text-white">Ninja Esencial (4-5 Fases)</strong>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Desconexión y cierre</span>
                 </button>
                 <button
                   onClick={() => applyTemplate('biohacker')}
-                  className="w-full text-left p-2 rounded-xl text-xs text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+                  className={`w-full text-left p-2 rounded-xl text-xs transition-colors ${
+                    isPurple
+                      ? 'text-slate-700 dark:text-slate-200 hover:bg-purple-500/15 hover:text-purple-700 dark:hover:text-purple-300'
+                      : 'text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300'
+                  }`}
                 >
-                  <strong className="block text-slate-900 dark:text-white">Biohacker Térmico (7 Fases)</strong>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Wim Hof, Ducha Fría, Físico</span>
+                  <strong className="block text-slate-900 dark:text-white">Descanso Profundo (6 Fases)</strong>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400">Magnesio, respiración, oscuridad</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Añadir Hábito Button */}
+          {/* Añadir Hábito / Fase Button */}
           <button
             onClick={handleOpenAddModal}
-            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            className={`px-5 py-2.5 rounded-2xl font-extrabold text-xs flex items-center gap-1.5 shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+              isPurple
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-500/25'
+                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black shadow-amber-500/25'
+            }`}
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Añadir Hábito</span>
+            <span>{isPurple ? 'Añadir Fase' : 'Añadir Hábito'}</span>
           </button>
         </div>
       </div>
 
       {/* Main List Container */}
-      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-amber-500/20 shadow-lg dark:shadow-2xl space-y-4">
+      <div className={`p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border shadow-lg dark:shadow-2xl space-y-4 ${
+        isPurple ? 'border-slate-200/80 dark:border-purple-500/20' : 'border-slate-200/80 dark:border-amber-500/20'
+      }`}>
         {/* Header of the sequence */}
-        <div className="flex items-center justify-between pb-3 border-b border-amber-500/15">
-          <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            SECUENCIA ({habits.length} ACTIVIDADES)
+        <div className={`flex items-center justify-between pb-3 border-b ${
+          isPurple ? 'border-purple-500/15' : 'border-amber-500/15'
+        }`}>
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Secuencia ({habits.length} {isPurple ? 'fases' : 'actividades'})
           </span>
 
           <button
             onClick={onResetDefaults}
-            className="text-xs text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className={`text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 transition-colors cursor-pointer ${
+              isPurple ? 'hover:text-purple-600 dark:hover:text-purple-400' : 'hover:text-amber-600 dark:hover:text-amber-400'
+            }`}
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Restablecer Guía Original</span>
           </button>
         </div>
 
-        {/* Habit items matching image_0a4bce81.png */}
+        {/* Habit items */}
         <div className="space-y-3">
           {habits.map((habit, index) => {
             const fieldCount = habit.fields?.length || 0;
@@ -210,7 +247,9 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                 key={habit.id}
                 className={`p-4 rounded-2xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                   habit.enabled
-                    ? 'bg-white/80 dark:bg-slate-950/60 border-amber-500/20 text-slate-800 dark:text-slate-200 hover:border-amber-500/40 shadow-xs'
+                    ? isPurple
+                      ? 'bg-white/80 dark:bg-slate-950/60 border-slate-200/80 dark:border-purple-500/20 text-slate-800 dark:text-slate-200 hover:border-purple-500/40 shadow-xs'
+                      : 'bg-white/80 dark:bg-slate-950/60 border-slate-200/80 dark:border-amber-500/20 text-slate-800 dark:text-slate-200 hover:border-amber-500/40 shadow-xs'
                     : 'bg-slate-100/60 dark:bg-black/40 border-slate-200 dark:border-slate-900 text-slate-400 dark:text-slate-500 opacity-60'
                 }`}
               >
@@ -222,7 +261,9 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                       type="button"
                       onClick={() => moveHabit(index, 'up')}
                       disabled={index === 0}
-                      className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-amber-500 disabled:opacity-20 cursor-pointer"
+                      className={`p-1 rounded text-slate-400 dark:text-slate-500 disabled:opacity-20 cursor-pointer ${
+                        isPurple ? 'hover:text-purple-500' : 'hover:text-amber-500'
+                      }`}
                       title="Subir posición"
                     >
                       <ChevronUp className="w-4 h-4" />
@@ -231,22 +272,30 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                       type="button"
                       onClick={() => moveHabit(index, 'down')}
                       disabled={index === habits.length - 1}
-                      className="p-1 rounded text-slate-400 dark:text-slate-500 hover:text-amber-500 disabled:opacity-20 cursor-pointer"
+                      className={`p-1 rounded text-slate-400 dark:text-slate-500 disabled:opacity-20 cursor-pointer ${
+                        isPurple ? 'hover:text-purple-500' : 'hover:text-amber-500'
+                      }`}
                       title="Bajar posición"
                     >
                       <ChevronDown className="w-4 h-4" />
                     </button>
                   </div>
 
-                  {/* Icon with warm round background */}
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 shadow-sm">
+                  {/* Icon with themed round squircle */}
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                    isPurple
+                      ? 'bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-400'
+                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400'
+                  }`}>
                     <IconRenderer name={habit.icon} className="w-5 h-5" />
                   </div>
 
                   {/* Information block */}
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-amber-600 dark:text-amber-400">
+                      <span className={`text-xs font-bold ${
+                        isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'
+                      }`}>
                         #{index + 1}
                       </span>
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
@@ -254,13 +303,17 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                       </h3>
 
                       {/* Category Badge */}
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-800">
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-800">
                         {getCategoryLabel(habit.category)}
                       </span>
 
                       {/* Fields Count Badge */}
                       {fieldCount > 0 && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1 font-semibold">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-lg border flex items-center gap-1 font-semibold ${
+                          isPurple
+                            ? 'bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30'
+                            : 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30'
+                        }`}>
                           <Tag className="w-2.5 h-2.5" />
                           <span>{fieldCount} {fieldCount === 1 ? 'campo' : 'campos'}</span>
                         </span>
@@ -276,7 +329,7 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                 {/* Right zone: Duration + Status button + Edit + Delete */}
                 <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-200 dark:border-slate-800">
                   {/* Duration label */}
-                  <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-200/80 dark:bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-300/60 dark:border-slate-800">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-200/80 dark:bg-slate-900/80 px-2.5 py-1 rounded-xl border border-slate-300/60 dark:border-slate-800">
                     {habit.defaultMinutes} min
                   </span>
 
@@ -297,7 +350,11 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleOpenEditModal(habit)}
-                    className="p-2 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-500/40 transition-colors cursor-pointer"
+                    className={`p-2 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 transition-colors cursor-pointer ${
+                      isPurple
+                        ? 'hover:text-purple-600 dark:hover:text-purple-300 hover:border-purple-500/40'
+                        : 'hover:text-amber-600 dark:hover:text-amber-300 hover:border-amber-500/40'
+                    }`}
                     title="Editar actividad y campos"
                   >
                     <Pencil className="w-4 h-4" />
@@ -325,6 +382,7 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveHabit}
+        theme={theme}
       />
     </div>
   );

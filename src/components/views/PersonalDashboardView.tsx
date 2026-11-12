@@ -62,32 +62,32 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Welcome & Horizon Row */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-blue-600 dark:text-blue-400 uppercase tracking-wider font-semibold">
-              {currentDateFormatted}
-            </span>
-            <span className="text-slate-400 dark:text-slate-600">·</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Panel de Evolución Personal</span>
+      {/* Top Welcome & Horizon Row - Apple Liquid Glass */}
+      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 shrink-0">
+              <TrendingUp className="w-6 h-6 stroke-[2.2]" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                5 Pilares de Crecimiento
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                Bienvenido, {data.profile.name} · {data.profile.dailyIntention || 'Ejecución integral en las 5 dimensiones.'}
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
-            Bienvenido, {data.profile.name}
-          </h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-xl">
-            {data.profile.dailyIntention || 'Ejecutando con serenidad y dirección en las 5 dimensiones.'}
-          </p>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => onNavigate('mi_dia')}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <span>Ir al Centro MI DÍA</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => onNavigate('mi_dia')}
+              className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs rounded-2xl shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+            >
+              <span>Ir al Centro Mi Día</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -102,7 +102,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                 <Calendar className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                 <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Bloques de Enfoque Hoy</h2>
               </div>
-              <div className="flex items-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
                 <span className="px-2 py-0.5 rounded-lg bg-slate-200/70 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">Semana 46</span>
                 <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-bold">Activo</span>
               </div>
@@ -111,7 +111,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
             {/* Visual Schedule Slots */}
             <div className="space-y-2.5">
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
-                <span className="text-xs font-mono text-amber-600 dark:text-amber-400 shrink-0 w-16 font-bold">07:00 am</span>
+                <span className="text-xs text-amber-600 dark:text-amber-400 shrink-0 w-16 font-bold">07:00 am</span>
                 <div className="flex-1">
                   <div className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <Sun className="w-3.5 h-3.5 text-amber-500" />
@@ -119,33 +119,33 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                   </div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Hidratación, meditación y 3 prioridades innegociables</span>
                 </div>
-                <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
                   Completado
                 </span>
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100/70 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-mono text-slate-500 dark:text-slate-400 shrink-0 w-16">09:00 am</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 shrink-0 w-16 font-medium">09:00 am</span>
                 <div className="flex-1">
                   <div className="text-xs font-semibold text-slate-900 dark:text-white">Trabajo Profundo & Negocios</div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Revisión contractual con cliente enterprise y KPIs de Alpha Studio</span>
                 </div>
-                <span className="text-[10px] font-mono text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 font-bold">
+                <span className="text-[10px] text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 font-bold">
                   En curso
                 </span>
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100/50 dark:bg-slate-900/30 border border-slate-200/60 dark:border-slate-800/80">
-                <span className="text-xs font-mono text-slate-400 shrink-0 w-16">01:00 pm</span>
+                <span className="text-xs text-slate-400 shrink-0 w-16 font-medium">01:00 pm</span>
                 <div className="flex-1">
                   <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">Cápsula de Sabiduría & Nutrición</div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Análisis del extracto de Ray Dalio y almuerzo limpio</span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">Programado</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Programado</span>
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-indigo-500/10 to-transparent border border-indigo-500/20">
-                <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 shrink-0 w-16 font-bold">08:30 pm</span>
+                <span className="text-xs text-indigo-600 dark:text-indigo-400 shrink-0 w-16 font-bold">08:30 pm</span>
                 <div className="flex-1">
                   <div className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                     <Moon className="w-3.5 h-3.5 text-indigo-500" />
@@ -153,7 +153,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                   </div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400">Evaluación de victorias, aprendizajes y preparación de mañana</span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">Pendiente</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Pendiente</span>
               </div>
             </div>
           </div>
@@ -181,11 +181,11 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                       <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block truncate max-w-[150px]">
                         {book.title}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-mono">
+                      <span className="text-[10px] text-slate-500 font-medium">
                         {book.currentPage} / {book.totalPages} pág
                       </span>
                     </div>
-                    <span className="text-xs font-mono text-blue-600 dark:text-blue-400 font-bold">
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-bold">
                       {Math.round((book.currentPage / book.totalPages) * 100)}%
                     </span>
                   </div>
@@ -206,7 +206,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
 
               <div className="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between">
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">Progreso</span>
-                <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
                   {data.goals[0]?.progressPercent || 68}%
                 </span>
               </div>
@@ -223,7 +223,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                 <Sparkles className="w-4 h-4 text-indigo-500" />
                 Puntos de Crecimiento
               </h2>
-              <span className="text-[11px] font-mono text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-lg border border-indigo-500/30 font-bold">
+              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded-lg border border-indigo-500/30">
                 Score 1820
               </span>
             </div>
@@ -233,7 +233,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">Estrategia & Visión</span>
-                  <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{growthPoints.strategy}%</span>
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">{growthPoints.strategy}%</span>
                 </div>
                 <input
                   type="range"
@@ -248,7 +248,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">Liderazgo & Delegación</span>
-                  <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{growthPoints.leadership}%</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-bold">{growthPoints.leadership}%</span>
                 </div>
                 <input
                   type="range"
@@ -263,7 +263,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">Eficiencia Operativa</span>
-                  <span className="font-mono text-teal-600 dark:text-teal-400 font-bold">{growthPoints.efficiency}%</span>
+                  <span className="text-teal-600 dark:text-teal-400 font-bold">{growthPoints.efficiency}%</span>
                 </div>
                 <input
                   type="range"
@@ -278,7 +278,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-700 dark:text-slate-300 font-medium">Salud & Físico</span>
-                  <span className="font-mono text-lime-600 dark:text-lime-400 font-bold">{growthPoints.health}%</span>
+                  <span className="text-lime-600 dark:text-lime-400 font-bold">{growthPoints.health}%</span>
                 </div>
                 <input
                   type="range"
@@ -327,7 +327,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                 </defs>
               </svg>
               <div className="absolute top-8 flex flex-col items-center">
-                <span className="text-3xl font-black font-mono text-slate-900 dark:text-white tabular-nums tracking-tight">
+                <span className="text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
                   440
                 </span>
                 <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">Excelente</span>
@@ -349,7 +349,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                 <Sparkles className="w-4 h-4 text-cyan-500" />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">AI Co-pilot Estratégico</h3>
               </div>
-              <span className="text-[10px] font-mono text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20 font-bold">
+              <span className="text-[10px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
                 Activo
               </span>
             </div>
@@ -358,14 +358,14 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               "Has completado tu sesión de fuerza y prioridades tempranas. Mantén blindado el bloque de la tarde sin interrupciones."
             </p>
 
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/80 dark:border-slate-800">
+            <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06]">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase font-mono block">Metas Activas</span>
-                <span className="text-sm font-mono font-bold text-blue-600 dark:text-blue-400">84% esta semana</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium block">Metas Activas</span>
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">84% esta semana</span>
               </div>
               <button
                 onClick={() => onNavigate('mindset')}
-                className="px-3 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
               >
                 Consultar IA
               </button>
@@ -420,10 +420,10 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors uppercase font-mono">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors uppercase">
                       {pillar.label}
                     </span>
-                    <span className="text-xs font-mono font-extrabold text-blue-600 dark:text-blue-400 tabular-nums">
+                    <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400">
                       {pillar.score}%
                     </span>
                   </div>

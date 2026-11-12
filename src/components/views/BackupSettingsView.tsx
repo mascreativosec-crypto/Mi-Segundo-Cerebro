@@ -58,21 +58,18 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="rounded-2xl bg-gradient-to-br from-emerald-950/40 via-[#0d1a13] to-[#070e0a] border border-emerald-500/20 p-5">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <FolderGit2 className="w-6 h-6" />
+      {/* Header Banner - Apple Liquid Glass with Slate/Zinc squircle */}
+      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-600 via-slate-700 to-zinc-800 flex items-center justify-center text-white shadow-lg shadow-slate-600/25 shrink-0">
+            <FolderGit2 className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white tracking-tight">Respaldos, Soberanía & Configuración</h1>
-              <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                PERSISTENCIA LOCAL + JSON
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Control absoluto de tus datos: exportación completa, importación instantánea y privacidad total sin dependencias de red.
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Respaldos, Soberanía & Configuración
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Control absoluto de tus datos: exportación completa JSON, importación instantánea y privacidad total.
             </p>
           </div>
         </div>
@@ -81,20 +78,22 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({
       {/* Backup and Restore Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Export Backup Card */}
-        <div className="rounded-2xl bg-[#0c1812] border border-emerald-500/15 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Download className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white">Exportar Respaldo Completo (JSON)</h2>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Descarga un archivo con toda tu información: Súper Mañana, Súper Noche, empresas, proyectos, tareas, biblioteca de sabiduría, entrenamientos y finanzas.
-          </p>
-          <div className="p-3 rounded-xl bg-[#08100c] border border-slate-800 text-[11px] font-mono text-slate-400">
-            Última sincronización local: {new Date(data.lastUpdated).toLocaleString()}
+        <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Download className="w-5 h-5 text-emerald-500" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Exportar Respaldo Completo (JSON)</h2>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Descarga un archivo con toda tu información: Súper Mañana, Súper Noche, empresas, proyectos, tareas, biblioteca de sabiduría, entrenamientos y finanzas.
+            </p>
+            <div className="p-3.5 rounded-2xl bg-slate-50/90 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] text-xs text-slate-500 dark:text-slate-400">
+              Última sincronización local: {new Date(data.lastUpdated).toLocaleString()}
+            </div>
           </div>
           <button
             onClick={onExportBackup}
-            className="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs rounded-xl shadow-md shadow-emerald-950 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
           >
             <Download className="w-4 h-4" />
             Descargar Respaldo JSON
@@ -102,22 +101,24 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({
         </div>
 
         {/* Import Backup Card */}
-        <div className="rounded-2xl bg-[#0c1812] border border-emerald-500/15 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Upload className="w-4 h-4 text-blue-400" />
-            <h2 className="text-sm font-bold text-white">Restaurar Respaldo desde JSON</h2>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Carga un archivo de respaldo previo para restaurar tu segundo cerebro en cualquier dispositivo al instante.
-          </p>
-          <div className="p-3 rounded-xl bg-[#08100c] border border-slate-800 text-[11px] text-slate-400">
-            Los datos importados reemplazarán el estado actual del navegador de forma segura.
+        <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-blue-500" />
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">Restaurar Respaldo desde JSON</h2>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Carga un archivo de respaldo previo para restaurar tu segundo cerebro en cualquier dispositivo al instante.
+            </p>
+            <div className="p-3.5 rounded-2xl bg-slate-50/90 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] text-xs text-slate-500 dark:text-slate-400">
+              Los datos importados reemplazarán el estado actual del navegador de forma segura.
+            </div>
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full py-2.5 px-4 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            className="w-full py-3 px-4 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white font-semibold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 text-blue-500" />
             Seleccionar Archivo JSON
           </button>
           <input
@@ -134,15 +135,15 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({
       </div>
 
       {/* User Profile Form */}
-      <form onSubmit={handleSaveProfile} className="rounded-2xl bg-[#0c1812] border border-emerald-500/15 p-5 space-y-4">
+      <form onSubmit={handleSaveProfile} className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-emerald-400" />
-            <h2 className="text-sm font-bold text-white">Perfil Ejecutivo & Físico</h2>
+            <User className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Perfil Ejecutivo & Físico</h2>
           </div>
           {saveSuccess && (
-            <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
               Guardado con éxito
             </span>
           )}
@@ -150,56 +151,56 @@ export const BackupSettingsView: React.FC<BackupSettingsViewProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">Nombre o Cargo</label>
+            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">Nombre o Cargo</label>
             <input
               type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              className="w-full bg-[#08100c] border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200"
+              className="w-full bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">Estatura (cm)</label>
+            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">Estatura (cm)</label>
             <input
               type="number"
               value={userHeight}
               onChange={(e) => setUserHeight(Number(e.target.value))}
-              className="w-full bg-[#08100c] border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono"
+              className="w-full bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white font-bold"
             />
           </div>
           <div>
-            <label className="text-[11px] text-slate-400 block mb-1">Peso (kg)</label>
+            <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">Peso (kg)</label>
             <input
               type="number"
               value={userWeight}
               onChange={(e) => setUserWeight(Number(e.target.value))}
-              className="w-full bg-[#08100c] border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono"
+              className="w-full bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white font-bold"
             />
           </div>
         </div>
 
         <div>
-          <label className="text-[11px] text-slate-400 block mb-1">Intención Diaria Predeterminada</label>
+          <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">Intención Diaria Predeterminada</label>
           <input
             type="text"
             value={dailyIntention}
             onChange={(e) => setDailyIntention(e.target.value)}
-            className="w-full bg-[#08100c] border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200"
+            className="w-full bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white"
           />
         </div>
 
-        <div className="flex items-center justify-between pt-3 border-t border-slate-800/80">
+        <div className="flex items-center justify-between pt-4 border-t border-slate-200/80 dark:border-white/[0.06]">
           <button
             type="button"
             onClick={handleResetData}
-            className="text-xs text-red-400 hover:underline flex items-center gap-1 cursor-pointer"
+            className="text-xs text-rose-500 hover:text-rose-600 font-medium flex items-center gap-1.5 cursor-pointer"
           >
-            <AlertTriangle className="w-3.5 h-3.5" />
+            <AlertTriangle className="w-4 h-4" />
             Restablecer a valores iniciales de fábrica
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs rounded-xl cursor-pointer"
+            className="px-5 py-2.5 bg-gradient-to-r from-slate-700 to-zinc-800 hover:from-slate-800 hover:to-zinc-900 text-white font-semibold text-xs rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
           >
             Guardar Cambios
           </button>

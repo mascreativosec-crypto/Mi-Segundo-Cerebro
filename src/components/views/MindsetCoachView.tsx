@@ -112,33 +112,30 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner - Celeste / Cyan vibrant identity */}
-      <div className="rounded-3xl bg-gradient-to-br from-cyan-950/40 via-[#0a1820] to-[#070e14] border border-cyan-500/25 p-6 shadow-xl">
+      {/* Header Banner - Apple Liquid Glass with Sky/Blue squircle */}
+      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 shrink-0">
+              <Sparkles className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white tracking-tight">Mentalidad, Motivación & Asesor IA</h1>
-                <span className="text-xs font-mono text-cyan-400 bg-cyan-500/10 px-2.5 py-0.5 rounded-md border border-cyan-500/30 font-bold">
-                  CELESTE · ESTRATÉGICO
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Inspirado en la disciplina de Isra García, la estrategia comercial de Jürgen Klaric y la introspección de Diego Dreyfus.
+              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                Mentalidad, Motivación & Asesor IA
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                Inspirado en disciplina de alto rendimiento, estrategia comercial y discernimiento estoico.
               </p>
             </div>
           </div>
 
           {/* Tone Selector */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-400 font-mono">Tono del Coach:</span>
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Tono:</span>
             <select
               value={selectedTone}
               onChange={(e) => setSelectedTone(e.target.value)}
-              className="bg-[#081216] border border-cyan-500/30 rounded-xl px-3 py-1.5 text-xs text-cyan-200 focus:outline-none focus:border-cyan-400"
+              className="bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:border-sky-500"
             >
               <option value="directo y exigente">Directo & Exigente (Isra García)</option>
               <option value="estrategico y persuasivo">Estratégico & Negociador (Jürgen Klaric)</option>
@@ -150,40 +147,40 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
       </div>
 
       {/* 3 Moments Switcher & Active Capsule Card */}
-      <div className="p-6 rounded-3xl bg-[#091419] border border-cyan-500/20 shadow-xl space-y-5">
+      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 p-1 bg-[#060e12] border border-cyan-500/20 rounded-2xl">
+          <div className="p-1.5 rounded-2xl bg-slate-100/80 dark:bg-black/40 border border-slate-200/80 dark:border-white/[0.06] backdrop-blur-md flex items-center gap-1.5">
             <button
               onClick={() => fetchMomentMotivation('activacion')}
-              className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
                 selectedMoment === 'activacion'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Sun className="w-4 h-4 text-amber-400" />
+              <Sun className="w-4 h-4 text-amber-500" />
               <span>Activación (07:00)</span>
             </button>
             <button
               onClick={() => fetchMomentMotivation('enfoque')}
-              className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
                 selectedMoment === 'enfoque'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Flame className="w-4 h-4 text-cyan-400" />
+              <Flame className="w-4 h-4 text-sky-500" />
               <span>Foco & Bloqueos (13:00)</span>
             </button>
             <button
               onClick={() => fetchMomentMotivation('reflexion')}
-              className={`px-4 py-2 text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
+              className={`px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer ${
                 selectedMoment === 'reflexion'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Moon className="w-4 h-4 text-purple-400" />
+              <Moon className="w-4 h-4 text-purple-500" />
               <span>Reflexión (20:30)</span>
             </button>
           </div>
@@ -191,7 +188,7 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
           <button
             onClick={() => fetchMomentMotivation(selectedMoment)}
             disabled={isLoadingMessage}
-            className="px-3 py-1.5 rounded-xl border border-cyan-500/30 text-xs text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-3.5 py-2 rounded-xl border border-sky-500/30 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMessage ? 'animate-spin' : ''}`} />
             <span>Regenerar con IA</span>
@@ -199,17 +196,16 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
         </div>
 
         {/* Dynamic Capsule Card */}
-        <div className="p-5 rounded-2xl bg-[#060e12] border border-cyan-500/25 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 via-sky-400 to-teal-400" />
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 via-white/80 to-blue-500/5 dark:from-sky-950/20 dark:via-slate-900/60 dark:to-blue-950/20 border border-sky-500/25 relative overflow-hidden">
           <div className="flex items-start gap-4">
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0 mt-0.5">
+            <div className="w-10 h-10 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0 mt-0.5 shadow-sm">
               <Sparkles className="w-5 h-5" />
             </div>
-            <div className="space-y-2 flex-1">
-              <span className="text-[10px] font-mono uppercase text-cyan-400 tracking-wider font-bold">
-                CÁPSULA DE IMPACTO DIRECTO · TONO: {selectedTone.toUpperCase()}
+            <div className="space-y-1.5 flex-1">
+              <span className="text-[11px] font-bold uppercase text-sky-600 dark:text-sky-400 tracking-wide block">
+                Cápsula de Impacto Directo · {selectedTone}
               </span>
-              <p className="text-sm text-slate-100 font-medium leading-relaxed">
+              <p className="text-sm text-slate-900 dark:text-slate-100 font-medium leading-relaxed">
                 "{activeMessage}"
               </p>
             </div>
@@ -218,35 +214,35 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
       </div>
 
       {/* Strategic Consultation Terminal */}
-      <div className="p-6 rounded-3xl bg-[#091419] border border-cyan-500/20 shadow-xl space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-cyan-500/15">
+      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
           <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-sm font-bold text-white tracking-tight">
-              Diálogo Estratégico con tu Consejo Directivo IA
+            <MessageSquare className="w-4 h-4 text-sky-500" />
+            <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+              Diálogo Estratégico con tu Consejo IA
             </h3>
           </div>
-          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-            CONTEXTO 5 PILARES ACTIVO
+          <span className="text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-500/10 px-3 py-1 rounded-full border border-sky-500/20">
+            Contexto 5 Pilares Activo
           </span>
         </div>
 
         {/* Chat History */}
-        <div className="space-y-3 max-h-[360px] overflow-y-auto p-2">
+        <div className="space-y-3 max-h-[380px] overflow-y-auto p-2">
           {chatHistory.map((item, idx) => (
             <div
               key={idx}
               className={`flex flex-col ${item.sender === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={`max-w-[85%] p-3.5 rounded-2xl text-xs leading-relaxed ${
+                className={`max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed ${
                   item.sender === 'user'
-                    ? 'bg-cyan-600 text-white rounded-br-sm'
-                    : 'bg-[#060e12] border border-cyan-500/25 text-slate-200 rounded-bl-sm'
+                    ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-br-sm shadow-md'
+                    : 'bg-slate-50/90 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] text-slate-900 dark:text-slate-100 rounded-bl-sm'
                 }`}
               >
-                <span className="text-[9px] font-mono block opacity-60 mb-1">
-                  {item.sender === 'user' ? 'TÚ (DIRECTOR)' : 'CONSEJERO ESTRATÉGICO IA'}
+                <span className="text-[10px] font-semibold block opacity-70 mb-1">
+                  {item.sender === 'user' ? 'Tú (Director)' : 'Consejero Estratégico IA'}
                 </span>
                 <p className="whitespace-pre-line">{item.text}</p>
               </div>
@@ -254,26 +250,26 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
           ))}
 
           {isConsulting && (
-            <div className="flex items-center gap-2 text-xs text-cyan-400 italic">
+            <div className="flex items-center gap-2 text-xs text-sky-600 dark:text-sky-400 italic">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              <span>El consejero está analizando tus 5 pilares y formulando respuesta...</span>
+              <span>El consejero está evaluando tus 5 pilares para responder...</span>
             </div>
           )}
         </div>
 
         {/* Input box */}
-        <form onSubmit={handleSendConsultation} className="flex items-center gap-2 pt-3 border-t border-cyan-500/15">
+        <form onSubmit={handleSendConsultation} className="flex items-center gap-2.5 pt-3 border-t border-slate-200/80 dark:border-white/[0.06]">
           <input
             type="text"
             value={userQuery}
             onChange={(e) => setUserQuery(e.target.value)}
             placeholder="Pregúntale sobre un bloqueo comercial, autosabotaje, toma de decisiones..."
-            className="flex-1 bg-[#060e12] border border-cyan-500/25 rounded-2xl px-4 py-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 transition-colors"
+            className="flex-1 bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 transition-colors"
           />
           <button
             type="submit"
             disabled={isConsulting || !userQuery.trim()}
-            className="px-5 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-black font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950 cursor-pointer"
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-sky-500/20 cursor-pointer active:scale-95"
           >
             <span>Consultar</span>
             <Send className="w-3.5 h-3.5" />

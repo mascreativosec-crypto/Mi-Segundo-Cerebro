@@ -10,20 +10,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// Port 3000 is required by the environment; 8080 is reserved for Nginx reverse proxy
+const PORT = process.env.PORT && process.env.PORT !== '8080' ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
 // Server-side Gemini client
 const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = new GoogleGenAI({
-  apiKey: apiKey,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
-  },
-});
+const ai = apiKey
+  ? new GoogleGenAI({
+      apiKey: apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    })
+  : null;
 
 // Strategic AI Advisor Endpoint
 // Principles: Isra García (discipline & high performance), Jürgen Klaric (strategic thinking & persuasion), Diego Dreyfus (radical introspection & accountability)
@@ -31,7 +34,7 @@ app.post('/api/gemini/advisor', async (req: Request, res: Response) => {
   try {
     const { prompt, context, tone = 'directo' } = req.body;
 
-    if (!apiKey) {
+    if (!ai || !apiKey) {
       // Graceful fallback response if API key is not configured in environment
       return res.json({
         response: `[Aviso: Configura tu GEMINI_API_KEY en Secrets para respuestas en tiempo real de IA]\n\nDiagnóstico Estratégico:\n1. Tienes tareas clave pendientes; enfócate en el 20% de acciones que generan el 80% del impacto.\n2. Cuida la sincronización entre tu pilar físico y tus responsabilidades empresariales.\n3. Revisa tus prioridades innegociables en 'MI DÍA'.`,
@@ -75,7 +78,7 @@ app.post('/api/gemini/motivation', async (req: Request, res: Response) => {
   try {
     const { moment = 'activacion', pillarSummary, tone = 'directo' } = req.body;
 
-    if (!apiKey) {
+    if (!ai || !apiKey) {
       const fallbacks: Record<string, string> = {
         activacion: "Hoy no negocias con tu mente. Tus 3 prioridades mandan. Pon el cuerpo en movimiento, agradece la oportunidad de existir y domina el día.",
         enfoque: "Pausa táctica: ¿Estás ocupado o estás siendo productivo? Elimina la distracción y termina lo que empezaste.",
@@ -113,7 +116,7 @@ app.post('/api/gemini/wisdom', async (req: Request, res: Response) => {
   try {
     const { bookTitle, author, chapter, excerpt } = req.body;
 
-    if (!apiKey) {
+    if (!ai || !apiKey) {
       return res.json({
         capsule: {
           bookTitle: bookTitle || "Principios para el Éxito",
@@ -183,8 +186,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE' && PORT !== 3000) {
+      console.warn(`Port ${PORT} in use, falling back to port 3000`);
+      app.listen(3000, '0.0.0.0', () => {
+        console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:3000`);
+      });
+    } else {
+      console.error('Server error:', err);
+    }
   });
 }
 

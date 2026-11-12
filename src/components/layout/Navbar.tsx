@@ -71,7 +71,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Capturar</span>
-          <span className="hidden sm:inline-block text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-mono text-white/90">⌘K</span>
+          <span className="hidden sm:inline-block text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-semibold text-white/90">⌘K</span>
         </button>
 
         <div className="h-4 w-px bg-slate-200 dark:bg-white/[0.1] hidden sm:block" />
