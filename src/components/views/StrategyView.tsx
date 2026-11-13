@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AppStoreData } from '../../services/storage';
 import { StrategicDecision } from '../../types';
 import {
@@ -19,9 +19,15 @@ import {
   Building2,
 } from 'lucide-react';
 
+export type StrategyStudioAction =
+  | { type: 'record' }
+  | { type: 'upload'; base64: string; mimeType: string; fileName: string };
+
 interface StrategyViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
+  initialStudioAction?: StrategyStudioAction | null;
+  onClearInitialStudioAction?: () => void;
 }
 
 const blobToBase64 = (blob: Blob): Promise<string> =>
@@ -39,6 +45,8 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
 export const StrategyView: React.FC<StrategyViewProps> = ({
   data,
   onUpdateData,
+  initialStudioAction,
+  onClearInitialStudioAction,
 }) => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>('all');
   const [scopeFilter, setScopeFilter] = useState<'all' | 'personal' | 'business'>('all');
@@ -120,6 +128,23 @@ export const StrategyView: React.FC<StrategyViewProps> = ({
     }
     setIsRecording(false);
   };
+
+  useEffect(() => {
+    if (!initialStudioAction) return;
+    setShowAiMinutesStudio(true);
+    setAiError(null);
+    if (initialStudioAction.type === 'upload') {
+      setAudioPayload({
+        base64: initialStudioAction.base64,
+        mimeType: initialStudioAction.mimeType,
+      });
+      setAudioFileLabel(initialStudioAction.fileName);
+    } else if (initialStudioAction.type === 'record') {
+      void startRecording();
+    }
+    onClearInitialStudioAction?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialStudioAction]);
 
   const handleAudioFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

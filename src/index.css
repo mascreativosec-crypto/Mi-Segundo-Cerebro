@@ -74,3 +74,48 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 html:not(.dark) ::-webkit-scrollbar-thumb:hover {
   background: rgba(15, 23, 42, 0.35);
 }
+
+/* Native mobile tap behavior & horizontal carousel utility */
+html, body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Mobile-only (< 1024px) app space optimization — desktop >= 1024px remains 100% untouched */
+@media (max-width: 1023px) {
+  main {
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main > div.space-y-6 > :not(:first-child) {
+    margin-top: 0.75rem;
+  }
+
+  main .space-y-6 > :not(:first-child) {
+    margin-top: 0.875rem;
+  }
+
+  main .gap-6 {
+    gap: 0.75rem;
+  }
+
+  main .rounded-3xl.p-6,
+  main .rounded-3xl.p-5 {
+    padding: 0.875rem;
+    border-radius: 1.125rem;
+  }
+
+  main .rounded-3xl.p-8 {
+    padding: 1rem;
+    border-radius: 1.125rem;
+  }
+}

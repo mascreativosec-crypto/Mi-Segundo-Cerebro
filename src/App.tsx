@@ -3,10 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StorageService, AppStoreData, initialStoreData } from './services/storage';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
+import { MobileBottomNav } from './components/layout/MobileBottomNav';
+import { MobileQuickActionSheet } from './components/layout/MobileQuickActionSheet';
+import { MobileModulesView } from './components/views/MobileModulesView';
 import { PersonalDashboardView } from './components/views/PersonalDashboardView';
 import { MiDiaView } from './components/views/MiDiaView';
 import { BusinessView } from './components/views/BusinessView';
@@ -20,7 +23,7 @@ import { SecondBrainView } from './components/views/SecondBrainView';
 import { ActivationCenterView } from './components/views/ActivationCenterView';
 import { BackupSettingsView } from './components/views/BackupSettingsView';
 import { GeneralTasksView } from './components/views/GeneralTasksView';
-import { StrategyView } from './components/views/StrategyView';
+import { StrategyView, StrategyStudioAction } from './components/views/StrategyView';
 import { HabitsAndGoalsView } from './components/views/HabitsAndGoalsView';
 import { PersonalExperimentsView } from './components/views/PersonalExperimentsView';
 import { AiAssistantView } from './components/views/AiAssistantView';
@@ -29,16 +32,19 @@ import { SuperNightModule } from './modules/super-night/SuperNightModule';
 import { PersonalModule } from './modules/personal/PersonalModule';
 import { QuickCaptureModal } from './components/modals/QuickCaptureModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
-import { Menu } from 'lucide-react';
 
 export default function App() {
   const [data, setData] = useState<AppStoreData>(() => StorageService.load());
   // Default landing view: Personal 5 Pillars growth dashboard (as chosen in Q3)
   const [activeView, setActiveView] = useState<string>('personal_dashboard');
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [lastModuleView, setLastModuleView] = useState<string>('personal_dashboard');
+  const [isMobileQuickActionOpen, setIsMobileQuickActionOpen] = useState<boolean>(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [financeInitialAction, setFinanceInitialAction] = useState<'add_tx' | null>(null);
+  const [strategyInitialAction, setStrategyInitialAction] = useState<StrategyStudioAction | null>(null);
+  const [businessFocusTaskId, setBusinessFocusTaskId] = useState<string | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // Apple Liquid Glass Theme State (dark vs light)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -115,6 +121,47 @@ export default function App() {
     setActiveView('personal_finances');
   };
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    if (activeView !== 'mobile_modules') {
+      setLastModuleView(activeView);
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const handleResize = (e: MediaQueryListEvent) => {
+      if (e.matches && activeView === 'mobile_modules') {
+        setActiveView(lastModuleView || 'personal_dashboard');
+      }
+    };
+    mq.addEventListener('change', handleResize);
+    return () => mq.removeEventListener('change', handleResize);
+  }, [activeView, lastModuleView]);
+
+  const handleRecordStrategicMeeting = () => {
+    setStrategyInitialAction({ type: 'record' });
+    setActiveView('strategy');
+  };
+
+  const handleUploadStrategicAudio = (file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      setStrategyInitialAction({
+        type: 'upload',
+        base64,
+        mimeType: file.type || 'audio/mp3',
+        fileName: file.name,
+      });
+      setActiveView('strategy');
+      setIsMobileQuickActionOpen(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSendMorningToReminders = (
     title: string,
     content: string,
@@ -144,7 +191,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/60 dark:bg-[#070e0a]/80 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-600 dark:selection:text-blue-300 transition-colors duration-200">
+    <div className="h-[100dvh] overflow-hidden lg:h-auto lg:min-h-screen lg:overflow-visible bg-slate-100/60 dark:bg-[#070e0a]/80 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-600 dark:selection:text-blue-300 transition-colors duration-200">
       {/* Top Bar Contract Navigation */}
       <Navbar
         activeView={activeView}
@@ -157,31 +204,38 @@ export default function App() {
         userName={data.profile.name}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        onOpenMobileMenu={() => {
+          setIsMobileQuickActionOpen(false);
+          setActiveView('mobile_modules');
+        }}
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar Navigation */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Sidebar Navigation (Desktop >= 1024px) */}
         <Sidebar
           activeView={activeView}
           onNavigate={setActiveView}
-          isOpenMobile={isMobileSidebarOpen}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 max-w-7xl mx-auto w-full">
-          {/* Mobile hamburger trigger */}
-          <div className="lg:hidden mb-4 flex items-center justify-between">
-            <button
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="p-2 bg-white/80 dark:bg-[#0c1219] border border-slate-300/80 dark:border-white/[0.1] rounded-2xl text-slate-700 dark:text-slate-300 flex items-center gap-2 text-xs font-medium cursor-pointer shadow-sm"
-            >
-              <Menu className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-              <span>Menú de Módulos</span>
-            </button>
-          </div>
-
+        {/* Main Content Area (Single native scroll container on mobile) */}
+        <main
+          ref={mainRef}
+          className="flex-1 min-h-0 overflow-y-auto px-3 pt-2.5 pb-20 md:px-6 md:pt-6 lg:p-8 max-w-7xl mx-auto w-full"
+        >
           {/* Views Router */}
+          {activeView === 'mobile_modules' && (
+            <MobileModulesView
+              lastModuleView={lastModuleView}
+              onSelectModule={(viewId) => {
+                setIsMobileQuickActionOpen(false);
+                setActiveView(viewId);
+              }}
+              userName={data.profile.name}
+              onExportBackup={handleExportBackup}
+              onImportBackup={handleImportBackup}
+            />
+          )}
+
           {activeView === 'personal_dashboard' && (
             <PersonalDashboardView
               data={data}
@@ -214,6 +268,10 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+              onOpenBusinessTaskKanban={(task) => {
+                setBusinessFocusTaskId(task.id);
+                setActiveView('business');
+              }}
             />
           )}
 
@@ -289,6 +347,8 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+              initialFocusTaskId={businessFocusTaskId}
+              onClearInitialFocusTask={() => setBusinessFocusTaskId(null)}
             />
           )}
 
@@ -296,6 +356,8 @@ export default function App() {
             <StrategyView
               data={data}
               onUpdateData={updateData}
+              initialStudioAction={strategyInitialAction}
+              onClearInitialStudioAction={() => setStrategyInitialAction(null)}
             />
           )}
 
@@ -387,6 +449,32 @@ export default function App() {
         notifications={data.notifications}
         onMarkAllAsRead={markAllNotificationsRead}
         onClearNotifications={clearAllNotifications}
+      />
+
+      {/* Mobile (+) Quick Action Sheet: Grabar Junta / Subir Audio / Captura Rápida */}
+      <MobileQuickActionSheet
+        isOpen={isMobileQuickActionOpen}
+        onClose={() => setIsMobileQuickActionOpen(false)}
+        onRecordStrategicMeeting={handleRecordStrategicMeeting}
+        onUploadStrategicAudio={handleUploadStrategicAudio}
+        onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+      />
+
+      {/* Native Mobile Bottom Tab Bar (lg:hidden) */}
+      <MobileBottomNav
+        activeView={activeView}
+        onNavigate={(view) => {
+          setActiveView(view);
+          setIsMobileQuickActionOpen(false);
+        }}
+        onOpenQuickActionSheet={() => {
+          setIsMobileQuickActionOpen((prev) => !prev);
+        }}
+        onOpenModulesMenu={() => {
+          setIsMobileQuickActionOpen(false);
+          setActiveView('mobile_modules');
+        }}
+        isQuickActionOpen={isMobileQuickActionOpen}
       />
     </div>
   );

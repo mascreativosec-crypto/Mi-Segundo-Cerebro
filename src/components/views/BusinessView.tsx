@@ -45,6 +45,8 @@ interface BusinessViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
   onOpenQuickCapture: () => void;
+  initialFocusTaskId?: string | null;
+  onClearInitialFocusTask?: () => void;
 }
 
 const PRIORITY_BADGE: Record<BusinessTask['priority'], { label: string; cls: string }> = {
@@ -76,6 +78,8 @@ const PROJECT_STATUS_LABEL: Record<BusinessProject['status'], string> = {
 export const BusinessView: React.FC<BusinessViewProps> = ({
   data,
   onUpdateData,
+  initialFocusTaskId,
+  onClearInitialFocusTask,
 }) => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>(
     data.businesses[0]?.id || ''
@@ -99,6 +103,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
   const [newTaskPriority, setNewTaskPriority] = useState<BusinessTask['priority']>('important');
   const [newTaskProjectId, setNewTaskProjectId] = useState<string>('');
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [newTaskEstimatedMinutes, setNewTaskEstimatedMinutes] = useState<number>(30);
   const [newTaskRemind, setNewTaskRemind] = useState<boolean>(false);
   const [modalSubtasks, setModalSubtasks] = useState<TaskSubtask[]>([]);
   const [subtaskDraftInput, setSubtaskDraftInput] = useState('');
@@ -204,6 +209,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
       setNewTaskPriority(task.priority);
       setNewTaskProjectId(task.projectId || '');
       setNewTaskDueDate(task.dueDate || new Date().toISOString().split('T')[0]);
+      setNewTaskEstimatedMinutes(task.estimatedMinutes || 30);
       setNewTaskRemind(Boolean(task.remindInInbox));
       setModalSubtasks((task.subtasks || []).map((st) => ({ ...st })));
     } else {
@@ -216,6 +222,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
       setNewTaskPriority('important');
       setNewTaskProjectId(activeProject?.id || businessProjects[0]?.id || '');
       setNewTaskDueDate(presetDueDate || new Date().toISOString().split('T')[0]);
+      setNewTaskEstimatedMinutes(30);
       setNewTaskRemind(false);
       setModalSubtasks([]);
     }
@@ -223,6 +230,25 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
     setShowInlineMemberForm(false);
     setShowFullTaskModal(true);
   };
+
+  React.useEffect(() => {
+    if (!initialFocusTaskId) return;
+    const targetTask = data.tasks.find((t) => t.id === initialFocusTaskId);
+    if (targetTask) {
+      if (targetTask.businessId) {
+        setSelectedBusinessId(targetTask.businessId);
+      }
+      setActiveTab('projects_tasks');
+      setBoardViewMode('kanban');
+      setActiveProjectId(targetTask.projectId || null);
+      openTaskModal(targetTask);
+      setTimeout(() => {
+        kanbanRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 90);
+    }
+    onClearInitialFocusTask?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFocusTaskId]);
 
   const calculateWeightedProjectProgress = (
     proj: BusinessProject,
@@ -494,6 +520,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                 isDelegated: Boolean(newTaskAssignee),
                 delegatedToId: newTaskAssignee || undefined,
                 dueDate: newTaskDueDate || t.dueDate,
+                estimatedMinutes: Number(newTaskEstimatedMinutes) || 30,
                 subtasks: finalSubtasks.length > 0 ? finalSubtasks : undefined,
                 remindInInbox: newTaskRemind,
               }
@@ -561,6 +588,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
       isDelegated: Boolean(newTaskAssignee),
       delegatedToId: newTaskAssignee || undefined,
       dueDate: newTaskDueDate || new Date().toISOString().split('T')[0],
+      estimatedMinutes: Number(newTaskEstimatedMinutes) || 30,
       tags: ['Empresarial', currentBusiness.name],
       subtasks: finalSubtasks.length > 0 ? finalSubtasks : undefined,
       remindInInbox: newTaskRemind,
@@ -1607,13 +1635,13 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
             {showFullTaskModal &&
               createPortal(
                 <div
-                  className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+                  className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto"
                   onClick={() => setShowFullTaskModal(false)}
                 >
                   <form
                     onSubmit={handleSaveTaskModal}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-3xl max-h-[88vh] overflow-y-auto p-6 rounded-3xl bg-white dark:bg-slate-900 border border-blue-500/30 shadow-2xl space-y-4 my-auto"
+                    className="w-full max-w-3xl max-h-[92dvh] sm:max-h-[88vh] overflow-y-auto p-4 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6 rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-blue-500/30 shadow-2xl space-y-4 sm:my-auto"
                   >
                   <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/[0.08]">
                     <div>
@@ -1735,8 +1763,8 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                     />
                   </div>
 
-                  {/* Date, Assignee + Inline New Member Registration */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start">
+                  {/* Date, Estimated Minutes, Assignee + Reminder */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-start">
                     <div>
                       <label className="text-[11px] font-semibold text-slate-500 block mb-1">
                         Fecha límite
@@ -1745,6 +1773,19 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                         type="date"
                         value={newTaskDueDate}
                         onChange={(e) => setNewTaskDueDate(e.target.value)}
+                        className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                        Tiempo estimado (min)
+                      </label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={480}
+                        value={newTaskEstimatedMinutes}
+                        onChange={(e) => setNewTaskEstimatedMinutes(Number(e.target.value))}
                         className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
                       />
                     </div>
@@ -1759,7 +1800,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                           className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
                         >
                           <UserPlus className="w-3 h-3" />
-                          <span>+ Registrar Nuevo</span>
+                          <span>+ Registrar</span>
                         </button>
                       </div>
                       <select
@@ -1775,14 +1816,14 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                         ))}
                       </select>
                     </div>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer pt-6">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer pt-2 lg:pt-6">
                       <input
                         type="checkbox"
                         checked={newTaskRemind}
                         onChange={(e) => setNewTaskRemind(e.target.checked)}
                         className="w-4 h-4 accent-violet-600 rounded"
                       />
-                      <span>Enviar también a Recordatorios</span>
+                      <span>Enviar a Recordatorios</span>
                     </label>
                   </div>
 

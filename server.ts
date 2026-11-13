@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import http from 'http';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -962,13 +963,29 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Vite middleware in dev or static files in production
 async function startServer() {
+  const httpServer = http.createServer(app);
+  let viteMiddleware: any = null;
+  let viteReadyPromise: Promise<void> | null = null;
+
   if (process.env.NODE_ENV !== 'production') {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+    app.use((req: Request, res: Response, next) => {
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      if (viteMiddleware) {
+        return viteMiddleware(req, res, next);
+      }
+      if (viteReadyPromise) {
+        viteReadyPromise
+          .then(() => {
+            if (viteMiddleware) viteMiddleware(req, res, next);
+            else next();
+          })
+          .catch(next);
+      } else {
+        next();
+      }
     });
-    app.use(vite.middlewares);
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (_req: Request, res: Response) => {
@@ -976,21 +993,38 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:${PORT}`);
-  });
-
-  server.on('error', (err: any) => {
+  httpServer.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE' && PORT !== 3000) {
       console.warn(`Port ${PORT} in use, falling back to port 3000`);
-      app.listen(3000, '0.0.0.0', () => {
+      httpServer.listen(3000, '0.0.0.0', () => {
         console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:3000`);
       });
     } else {
       console.error('Server error:', err);
     }
   });
+
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:${PORT}`);
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    viteReadyPromise = (async () => {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
+        },
+        appType: 'spa',
+      });
+      viteMiddleware = vite.middlewares;
+    })();
+    await viteReadyPromise;
+  }
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('Failed to start server:', err);
+});
 

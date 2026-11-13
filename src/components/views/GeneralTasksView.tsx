@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { AppStoreData } from '../../services/storage';
-import { BusinessTask, PillarKey } from '../../types';
+import { BusinessTask, PillarKey, TaskSubtask } from '../../types';
 import {
   CheckSquare,
+  Square,
   Plus,
   List,
   Columns3,
@@ -13,18 +15,24 @@ import {
   UserCheck,
   Building2,
   User,
-  AlertCircle,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  ArrowRight,
+  ListChecks,
+  Link2,
+  ExternalLink,
+  X,
+  BellRing,
+  FolderKanban,
+  ArrowUpRight,
+  FileText,
 } from 'lucide-react';
 
 interface GeneralTasksViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
   onOpenQuickCapture: () => void;
+  onOpenBusinessTaskKanban?: (task: BusinessTask) => void;
 }
 
 type ViewMode = 'list' | 'week' | 'calendar';
@@ -34,6 +42,7 @@ type ScopeFilter = 'all' | 'personal' | 'business';
 export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
   data,
   onUpdateData,
+  onOpenBusinessTaskKanban,
 }) => {
   // Navigation & View Mode
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -51,13 +60,33 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
   // New task form
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newResourceLink, setNewResourceLink] = useState('');
   const [scope, setScope] = useState<'personal' | 'business'>('personal');
   const [businessId, setBusinessId] = useState<string>(data.businesses[0]?.id || '');
+  const [newProjectId, setNewProjectId] = useState<string>('');
   const [pillar, setPillar] = useState<PillarKey | ''>('intelectual');
   const [priority, setPriority] = useState<BusinessTask['priority']>('important');
   const [dueDate, setDueDate] = useState<string>(todayStr);
   const [estimatedMinutes, setEstimatedMinutes] = useState<number>(30);
   const [delegatedToId, setDelegatedToId] = useState<string>('');
+  const [newSubtasks, setNewSubtasks] = useState<TaskSubtask[]>([]);
+  const [newSubtaskDraft, setNewSubtaskDraft] = useState('');
+  const [newRemindInInbox, setNewRemindInInbox] = useState<boolean>(false);
+
+  // Personal Task Detail Modal State (also acts as fallback if business callback absent)
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [detailTitle, setDetailTitle] = useState('');
+  const [detailDescription, setDetailDescription] = useState('');
+  const [detailResourceLink, setDetailResourceLink] = useState('');
+  const [detailPillar, setDetailPillar] = useState<PillarKey | ''>('intelectual');
+  const [detailPriority, setDetailPriority] = useState<BusinessTask['priority']>('important');
+  const [detailStatus, setDetailStatus] = useState<BusinessTask['status']>('todo');
+  const [detailDueDate, setDetailDueDate] = useState<string>(todayStr);
+  const [detailEstimatedMinutes, setDetailEstimatedMinutes] = useState<number>(30);
+  const [detailSubtasks, setDetailSubtasks] = useState<TaskSubtask[]>([]);
+  const [detailSubtaskDraft, setDetailSubtaskDraft] = useState('');
+  const [detailRemindInInbox, setDetailRemindInInbox] = useState<boolean>(false);
 
   // Date math utilities
   const getWeekDates = (offsetWeeks: number) => {
@@ -154,17 +183,149 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
     }));
   };
 
+  const handleOpenTaskDetail = (task: BusinessTask) => {
+    if ((task.scope === 'business' || Boolean(task.businessId)) && onOpenBusinessTaskKanban) {
+      onOpenBusinessTaskKanban(task);
+      return;
+    }
+
+    setDetailTaskId(task.id);
+    setDetailTitle(task.title);
+    setDetailDescription(task.description || '');
+    setDetailResourceLink(task.resourceLink || '');
+    setDetailPillar(task.pillar || 'intelectual');
+    setDetailPriority(task.priority);
+    setDetailStatus(task.status);
+    setDetailDueDate(task.dueDate || todayStr);
+    setDetailEstimatedMinutes(task.estimatedMinutes || 30);
+    setDetailSubtasks((task.subtasks || []).map((st) => ({ ...st })));
+    setDetailSubtaskDraft('');
+    setDetailRemindInInbox(Boolean(task.remindInInbox));
+  };
+
+  const handleAddDetailSubtask = () => {
+    if (!detailSubtaskDraft.trim()) return;
+    setDetailSubtasks((prev) => [
+      ...prev,
+      {
+        id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        text: detailSubtaskDraft.trim(),
+        done: false,
+      },
+    ]);
+    setDetailSubtaskDraft('');
+  };
+
+  const handleSaveTaskDetail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detailTaskId || !detailTitle.trim()) return;
+
+    const finalSubtasks: TaskSubtask[] = detailSubtaskDraft.trim()
+      ? [
+          ...detailSubtasks,
+          {
+            id: `sub_${Date.now()}_pending`,
+            text: detailSubtaskDraft.trim(),
+            done: false,
+          },
+        ]
+      : detailSubtasks;
+
+    onUpdateData((prev) => {
+      const nextTasks = prev.tasks.map((t) =>
+        t.id === detailTaskId
+          ? {
+              ...t,
+              title: detailTitle.trim(),
+              description: detailDescription.trim() || undefined,
+              resourceLink: detailResourceLink.trim() || undefined,
+              pillar: t.scope === 'personal' && detailPillar ? (detailPillar as PillarKey) : t.pillar,
+              priority: detailPriority,
+              status: detailStatus,
+              completedAt:
+                detailStatus === 'done'
+                  ? t.completedAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : undefined,
+              dueDate: detailDueDate || t.dueDate,
+              estimatedMinutes: Number(detailEstimatedMinutes) || 30,
+              subtasks: finalSubtasks.length > 0 ? finalSubtasks : undefined,
+              remindInInbox: detailRemindInInbox,
+            }
+          : t
+      );
+
+      const alreadyReminded = (prev.notesReminders || []).some((r) => r.linkedTaskId === detailTaskId);
+      const nextReminders =
+        detailRemindInInbox && !alreadyReminded
+          ? [
+              {
+                id: `nr_task_${Date.now()}`,
+                title: detailTitle.trim(),
+                content: detailDescription.trim() || `Tarea personal · Vence: ${detailDueDate}`,
+                category: 'tarea' as const,
+                originModule: 'personal' as const,
+                targetView: 'tasks_general',
+                linkedTaskId: detailTaskId,
+                reminderDate: detailDueDate,
+                showInMiDia: true,
+                completed: detailStatus === 'done',
+                pinned: detailPriority === 'urgent_important',
+                source: 'user' as const,
+                createdAt: new Date().toISOString(),
+              },
+              ...(prev.notesReminders || []),
+            ]
+          : prev.notesReminders;
+
+      return {
+        ...prev,
+        tasks: nextTasks,
+        notesReminders: nextReminders,
+      };
+    });
+
+    setDetailTaskId(null);
+    setDetailSubtaskDraft('');
+  };
+
+  const handleAddNewSubtask = () => {
+    if (!newSubtaskDraft.trim()) return;
+    setNewSubtasks((prev) => [
+      ...prev,
+      {
+        id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        text: newSubtaskDraft.trim(),
+        done: false,
+      },
+    ]);
+    setNewSubtaskDraft('');
+  };
+
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     const targetBusiness = scope === 'business' ? data.businesses.find((b) => b.id === businessId) : null;
+    const finalSubtasks: TaskSubtask[] = newSubtaskDraft.trim()
+      ? [
+          ...newSubtasks,
+          {
+            id: `sub_${Date.now()}_pending`,
+            text: newSubtaskDraft.trim(),
+            done: false,
+          },
+        ]
+      : newSubtasks;
 
+    const taskId = `task_${Date.now()}`;
     const newTask: BusinessTask = {
-      id: `task_${Date.now()}`,
+      id: taskId,
       title: title.trim(),
+      description: newDescription.trim() || undefined,
+      resourceLink: newResourceLink.trim() || undefined,
       scope: scope,
       businessId: scope === 'business' ? businessId : undefined,
+      projectId: scope === 'business' && newProjectId ? newProjectId : undefined,
       pillar: scope === 'personal' && pillar ? (pillar as PillarKey) : undefined,
       priority: priority,
       status: 'todo',
@@ -172,6 +333,8 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
       delegatedToId: delegatedToId || undefined,
       dueDate: dueDate || todayStr,
       estimatedMinutes: Number(estimatedMinutes) || 30,
+      subtasks: finalSubtasks.length > 0 ? finalSubtasks : undefined,
+      remindInInbox: newRemindInInbox,
       tags: [
         scope === 'personal' ? 'Personal' : `Empresa: ${targetBusiness?.name || 'General'}`,
       ],
@@ -180,9 +343,37 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
     onUpdateData((prev) => ({
       ...prev,
       tasks: [newTask, ...prev.tasks],
+      notesReminders: newRemindInInbox
+        ? [
+            {
+              id: `nr_task_${Date.now()}`,
+              title: newTask.title,
+              content:
+                newTask.description ||
+                `${scope === 'personal' ? 'Tarea personal' : targetBusiness?.name || 'Empresa'} · Vence: ${newTask.dueDate}`,
+              category: 'tarea',
+              originModule: scope === 'business' ? 'business' : 'personal',
+              targetView: scope === 'business' ? 'business' : 'tasks_general',
+              linkedTaskId: taskId,
+              reminderDate: newTask.dueDate,
+              showInMiDia: true,
+              completed: false,
+              pinned: newTask.priority === 'urgent_important',
+              source: 'user',
+              createdAt: new Date().toISOString(),
+            },
+            ...(prev.notesReminders || []),
+          ]
+        : prev.notesReminders,
     }));
 
     setTitle('');
+    setNewDescription('');
+    setNewResourceLink('');
+    setNewProjectId('');
+    setNewSubtasks([]);
+    setNewSubtaskDraft('');
+    setNewRemindInInbox(false);
     setShowAddForm(false);
   };
 
@@ -276,7 +467,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* View Mode Switcher */}
             <div className="flex items-center p-1 bg-slate-200/50 dark:bg-black/40 border border-slate-300/40 dark:border-white/[0.06] rounded-2xl">
               <button
@@ -612,6 +803,112 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 ))}
               </select>
             </div>
+
+            {scope === 'business' && (
+              <div>
+                <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">Proyecto del Kanban (Opcional)</label>
+                <select
+                  value={newProjectId}
+                  onChange={(e) => setNewProjectId(e.target.value)}
+                  className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                >
+                  <option value="">Tablero general de la empresa</option>
+                  {data.projects
+                    .filter((p) => p.businessId === businessId)
+                    .map((proj) => (
+                      <option key={proj.id} value={proj.id}>
+                        {proj.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            <div className="md:col-span-2">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Descripción / Qué toca hacer
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Detalla qué hay que hacer, pasos o criterios clave..."
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/[0.08] rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500 resize-y"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Link de Recurso / Archivo (Opcional)
+              </label>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={newResourceLink}
+                onChange={(e) => setNewResourceLink(e.target.value)}
+                className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer py-2">
+                <input
+                  type="checkbox"
+                  checked={newRemindInInbox}
+                  onChange={(e) => setNewRemindInInbox(e.target.checked)}
+                  className="w-4 h-4 accent-violet-600 rounded"
+                />
+                <span>Enviar también a Bandeja de Recordatorios</span>
+              </label>
+            </div>
+
+            <div className="md:col-span-2 space-y-2 pt-2 border-t border-slate-200/70 dark:border-white/[0.06]">
+              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <ListChecks className="w-3.5 h-3.5 text-sky-500" />
+                <span>Subtareas / Pasos ({newSubtasks.length})</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Añadir paso o subtarea..."
+                  value={newSubtaskDraft}
+                  onChange={(e) => setNewSubtaskDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewSubtask();
+                    }
+                  }}
+                  className="flex-1 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddNewSubtask}
+                  className="px-3 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 text-xs font-bold cursor-pointer shrink-0"
+                >
+                  + Paso
+                </button>
+              </div>
+              {newSubtasks.length > 0 && (
+                <div className="space-y-1">
+                  {newSubtasks.map((st) => (
+                    <div
+                      key={st.id}
+                      className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-100/80 dark:bg-black/30 text-xs"
+                    >
+                      <span className="text-slate-800 dark:text-slate-200 truncate">{st.text}</span>
+                      <button
+                        type="button"
+                        onClick={() => setNewSubtasks((prev) => prev.filter((item) => item.id !== st.id))}
+                        className="text-slate-400 hover:text-rose-500 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-white/[0.08]">
@@ -658,24 +955,34 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
               const isOverdue = task.dueDate < todayStr && !isDone;
               const isDueToday = task.dueDate === todayStr;
               const business = task.businessId ? data.businesses.find((b) => b.id === task.businessId) : null;
+              const project = task.projectId ? data.projects.find((p) => p.id === task.projectId) : null;
               const assignee = task.delegatedToId ? data.teamMembers.find((m) => m.id === task.delegatedToId) : null;
+              const subtasks = task.subtasks || [];
+              const doneSubs = subtasks.filter((s) => s.done).length;
+              const isBusinessTask = task.scope === 'business' || Boolean(task.businessId);
 
               return (
                 <div
                   key={task.id}
-                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl border gap-3 transition-all ${
+                  onClick={() => handleOpenTaskDetail(task)}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl border gap-3 transition-all cursor-pointer group ${
                     isDone
                       ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 dark:from-indigo-950/25 dark:to-violet-950/20 border-indigo-500/30 text-slate-500 dark:text-slate-400'
                       : isOverdue
-                      ? 'bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/30 text-slate-900 dark:text-slate-100'
-                      : 'bg-white dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] text-slate-900 dark:text-slate-100 hover:border-sky-500/45 shadow-xs'
+                      ? 'bg-rose-500/10 dark:bg-rose-950/20 border-rose-500/30 text-slate-900 dark:text-slate-100 hover:border-rose-500/60'
+                      : 'bg-white dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] text-slate-900 dark:text-slate-100 hover:border-sky-500/50 shadow-xs'
                   }`}
                 >
-                  <div
-                    onClick={() => toggleTaskStatus(task.id)}
-                    className="flex items-start sm:items-center gap-3 flex-1 cursor-pointer"
-                  >
-                    <button className="mt-0.5 sm:mt-0 cursor-pointer">
+                  <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleTaskStatus(task.id);
+                      }}
+                      title={isDone ? 'Reabrir tarea' : 'Marcar como completada'}
+                      className="mt-0.5 sm:mt-0 cursor-pointer shrink-0"
+                    >
                       {isDone ? (
                         <CheckCircle2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                       ) : (
@@ -683,10 +990,22 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                       )}
                     </button>
 
-                    <div>
-                      <span className={`text-xs ${isDone ? 'line-through text-slate-400 dark:text-slate-500' : 'font-semibold text-slate-900 dark:text-white'}`}>
+                    <div className="min-w-0 flex-1">
+                      <span
+                        className={`text-xs block transition-colors ${
+                          isDone
+                            ? 'line-through text-slate-400 dark:text-slate-500'
+                            : 'font-semibold text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400'
+                        }`}
+                      >
                         {task.title}
                       </span>
+
+                      {task.description && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                          {task.description}
+                        </p>
+                      )}
 
                       <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                         {/* Scope & Company Tag */}
@@ -698,6 +1017,12 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                           <span className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-indigo-500/15 to-violet-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 font-semibold text-[10px] flex items-center gap-1">
                             <Building2 className="w-3 h-3" />
                             {business?.name || 'Empresa'}
+                          </span>
+                        )}
+
+                        {project && (
+                          <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-white/10 text-[10px] font-semibold">
+                            {project.name}
                           </span>
                         )}
 
@@ -717,12 +1042,32 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                           </>
                         )}
 
+                        {subtasks.length > 0 && (
+                          <>
+                            <span>·</span>
+                            <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold tabular-nums">
+                              <ListChecks className="w-3 h-3" />
+                              {doneSubs}/{subtasks.length}
+                            </span>
+                          </>
+                        )}
+
+                        {task.resourceLink && (
+                          <>
+                            <span>·</span>
+                            <span className="flex items-center gap-1 text-cyan-600 dark:text-cyan-400 font-semibold">
+                              <Link2 className="w-3 h-3" />
+                              Recurso
+                            </span>
+                          </>
+                        )}
+
                         {assignee && (
                           <>
                             <span>·</span>
                             <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
                               <UserCheck className="w-3 h-3" />
-                              Delegado a {assignee.name}
+                              {assignee.name}
                             </span>
                           </>
                         )}
@@ -730,25 +1075,46 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800">
-                    {task.priority === 'urgent_important' && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
-                        Urgente & Vital
-                      </span>
-                    )}
-                    {task.priority === 'important' && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-gradient-to-r from-sky-500/15 to-indigo-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
-                        Alto Impacto
-                      </span>
-                    )}
+                  <div
+                    className="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {task.priority === 'urgent_important' && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                          Urgente &amp; Vital
+                        </span>
+                      )}
+                      {task.priority === 'important' && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-gradient-to-r from-sky-500/15 to-indigo-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+                          Alto Impacto
+                        </span>
+                      )}
+                    </div>
 
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="text-slate-400 hover:text-red-500 p-1 cursor-pointer transition-colors"
-                      title="Eliminar tarea"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTaskDetail(task)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                          isBusinessTask
+                            ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-300'
+                        }`}
+                      >
+                        <span>{isBusinessTask ? 'Kanban' : 'Detalle'}</span>
+                        <ArrowUpRight className="w-3 h-3" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => deleteTask(task.id)}
+                        className="text-slate-400 hover:text-red-500 p-1 cursor-pointer transition-colors"
+                        title="Eliminar tarea"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -835,17 +1201,23 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                           return (
                             <div
                               key={t.id}
-                              className={`p-2 rounded-xl border text-xs transition-all ${
+                              onClick={() => handleOpenTaskDetail(t)}
+                              className={`p-2 rounded-xl border text-xs transition-all cursor-pointer ${
                                 isDone
                                   ? 'bg-indigo-500/10 dark:bg-indigo-950/20 border-indigo-500/25 text-slate-400 dark:text-slate-500'
-                                  : 'bg-white dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] text-slate-900 dark:text-slate-200 hover:border-sky-500/35 shadow-xs'
+                                  : 'bg-white dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] text-slate-900 dark:text-slate-200 hover:border-sky-500/45 shadow-xs'
                               }`}
                             >
-                              <div
-                                onClick={() => toggleTaskStatus(t.id)}
-                                className="flex items-start gap-1.5 cursor-pointer"
-                              >
-                                <button className="mt-0.5 shrink-0 cursor-pointer">
+                              <div className="flex items-start gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleTaskStatus(t.id);
+                                  }}
+                                  className="mt-0.5 shrink-0 cursor-pointer"
+                                  title={isDone ? 'Reabrir tarea' : 'Completar tarea'}
+                                >
                                   {isDone ? (
                                     <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                                   ) : (
@@ -857,15 +1229,28 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                                 </span>
                               </div>
 
-                              <div className="mt-1.5 pt-1 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                                <span>{t.scope === 'personal' ? 'Personal' : biz?.name || 'Empresa'}</span>
-                                <button
-                                  onClick={() => rescheduleTask(t.id, new Date(new Date(day.dateStr).getTime() + 86400000).toISOString().split('T')[0])}
-                                  className="text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
-                                  title="Posponer al día siguiente"
-                                >
-                                  +1d
-                                </button>
+                              <div
+                                className="mt-1.5 pt-1 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-[10px] font-medium text-slate-500 dark:text-slate-400"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="truncate">{t.scope === 'personal' ? 'Personal' : biz?.name || 'Empresa'}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenTaskDetail(t)}
+                                    className="text-sky-600 dark:text-sky-400 font-bold hover:underline cursor-pointer"
+                                  >
+                                    {t.scope === 'business' || t.businessId ? 'Kanban' : 'Ver'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => rescheduleTask(t.id, new Date(new Date(day.dateStr).getTime() + 86400000).toISOString().split('T')[0])}
+                                    className="text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
+                                    title="Posponer al día siguiente"
+                                  >
+                                    +1d
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -1014,32 +1399,41 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                       return (
                         <div
                           key={task.id}
-                          className={`p-3 rounded-xl border transition-all ${
+                          onClick={() => handleOpenTaskDetail(task)}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer ${
                             isDone
                               ? 'bg-gradient-to-r from-indigo-500/10 to-violet-500/10 dark:from-indigo-950/20 dark:to-violet-950/15 border-indigo-500/25 text-slate-500'
-                              : 'bg-slate-50/90 dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] text-slate-800 dark:text-slate-200'
+                              : 'bg-slate-50/90 dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] hover:border-sky-500/45 text-slate-800 dark:text-slate-200'
                           }`}
                         >
-                          <div
-                            onClick={() => toggleTaskStatus(task.id)}
-                            className="flex items-start gap-2.5 cursor-pointer"
-                          >
-                            <button className="mt-0.5 shrink-0 cursor-pointer">
-                              {isDone ? (
-                                <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                              ) : (
-                                <Circle className="w-4 h-4 text-slate-400 dark:text-slate-600 hover:text-sky-500" />
-                              )}
-                            </button>
-                            <div>
-                              <span className={`text-xs ${isDone ? 'line-through text-slate-400' : 'font-semibold text-slate-900 dark:text-white'}`}>
-                                {task.title}
-                              </span>
-                              <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                <span>{task.scope === 'personal' ? 'Personal' : biz?.name || 'Empresa'}</span>
-                                {task.estimatedMinutes && <span>· {task.estimatedMinutes} min</span>}
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleTaskStatus(task.id);
+                                }}
+                                className="mt-0.5 shrink-0 cursor-pointer"
+                                title={isDone ? 'Reabrir tarea' : 'Completar tarea'}
+                              >
+                                {isDone ? (
+                                  <CheckCircle2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-slate-400 dark:text-slate-600 hover:text-sky-500" />
+                                )}
+                              </button>
+                              <div className="min-w-0">
+                                <span className={`text-xs block ${isDone ? 'line-through text-slate-400' : 'font-semibold text-slate-900 dark:text-white'}`}>
+                                  {task.title}
+                                </span>
+                                <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                  <span>{task.scope === 'personal' ? 'Personal' : biz?.name || 'Empresa'}</span>
+                                  {task.estimatedMinutes && <span>· {task.estimatedMinutes} min</span>}
+                                </div>
                               </div>
                             </div>
+                            <ArrowUpRight className="w-3.5 h-3.5 text-sky-500 shrink-0 mt-0.5" />
                           </div>
                         </div>
                       );
@@ -1049,11 +1443,320 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             </div>
 
             <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] text-[11px] text-slate-500 dark:text-slate-400">
-              Usa el botón superior para añadir tareas directamente asignadas a esta fecha seleccionada.
+              Toca cualquier tarea para abrir su detalle completo o su tablero Kanban correspondiente.
             </div>
           </div>
         </div>
       )}
+
+      {/* Personal Task Detail & Edit Modal (Portal — Web & Mobile responsive) */}
+      {detailTaskId &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto"
+            onClick={() => setDetailTaskId(null)}
+          >
+            <form
+              onSubmit={handleSaveTaskDetail}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl max-h-[92dvh] sm:max-h-[88vh] overflow-y-auto p-4 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pb-6 rounded-t-3xl sm:rounded-3xl bg-white dark:bg-slate-900 border border-sky-500/30 shadow-2xl space-y-4 sm:my-auto"
+            >
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-200 dark:border-white/[0.08]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Detalle de Tarea Personal
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Consulta y actualiza qué toca hacer, subtareas, tiempo, recurso y estado.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailTaskId(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Título de la Tarea
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={detailTitle}
+                  onChange={(e) => setDetailTitle(e.target.value)}
+                  className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              {/* Status selector */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                  Estado:
+                </span>
+                {([
+                  { id: 'inbox', label: 'Bandeja' },
+                  { id: 'todo', label: 'Por Hacer' },
+                  { id: 'in_progress', label: 'En Progreso' },
+                  { id: 'done', label: 'Completada' },
+                ] as const).map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() => setDetailStatus(st.id)}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                      detailStatus === st.id
+                        ? 'bg-sky-600 text-white border-sky-500 shadow-xs'
+                        : 'bg-slate-100 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Pillar, Priority, Due Date, Estimated Minutes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    Pilar de Crecimiento
+                  </label>
+                  <select
+                    value={detailPillar}
+                    onChange={(e) => setDetailPillar(e.target.value as PillarKey | '')}
+                    className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  >
+                    <option value="fisico">Físico</option>
+                    <option value="intelectual">Intelectual</option>
+                    <option value="emocional">Emocional</option>
+                    <option value="espiritual">Espiritual</option>
+                    <option value="financiero">Financiero</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    Prioridad
+                  </label>
+                  <select
+                    value={detailPriority}
+                    onChange={(e) => setDetailPriority(e.target.value as BusinessTask['priority'])}
+                    className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  >
+                    <option value="urgent_important">Urgente &amp; Vital</option>
+                    <option value="important">Alto Impacto</option>
+                    <option value="urgent">Urgente</option>
+                    <option value="normal">Normal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    Fecha Límite
+                  </label>
+                  <input
+                    type="date"
+                    value={detailDueDate}
+                    onChange={(e) => setDetailDueDate(e.target.value)}
+                    className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 block mb-1">
+                    Tiempo Estimado (min)
+                  </label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={480}
+                    value={detailEstimatedMinutes}
+                    onChange={(e) => setDetailEstimatedMinutes(Number(e.target.value))}
+                    className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Description / What needs to be done */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Descripción / Qué toca hacer
+                </label>
+                <textarea
+                  rows={3}
+                  value={detailDescription}
+                  onChange={(e) => setDetailDescription(e.target.value)}
+                  placeholder="Describe exactamente qué pasos seguir, notas de contexto o resultado esperado..."
+                  className="w-full bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white resize-y focus:outline-none focus:border-sky-500"
+                />
+              </div>
+
+              {/* Resource Link + Reminder */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    Link de Recurso / Referencia
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      value={detailResourceLink}
+                      onChange={(e) => setDetailResourceLink(e.target.value)}
+                      placeholder="https://drive.google.com/... o https://..."
+                      className="flex-1 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500"
+                    />
+                    {detailResourceLink.trim() && (
+                      <a
+                        href={detailResourceLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 text-xs font-bold flex items-center gap-1 shrink-0"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Abrir</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer py-2">
+                  <input
+                    type="checkbox"
+                    checked={detailRemindInInbox}
+                    onChange={(e) => setDetailRemindInInbox(e.target.checked)}
+                    className="w-4 h-4 accent-violet-600 rounded"
+                  />
+                  <span className="flex items-center gap-1">
+                    <BellRing className="w-3.5 h-3.5 text-violet-500" />
+                    Recordatorios
+                  </span>
+                </label>
+              </div>
+
+              {/* Subtasks Checklist */}
+              <div className="space-y-2.5 pt-3 border-t border-slate-200 dark:border-white/[0.06]">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <ListChecks className="w-3.5 h-3.5 text-sky-500" />
+                    <span>
+                      Checklist / Subtareas ({detailSubtasks.filter((s) => s.done).length}/{detailSubtasks.length})
+                    </span>
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Añadir paso o subtarea..."
+                    value={detailSubtaskDraft}
+                    onChange={(e) => setDetailSubtaskDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddDetailSubtask();
+                      }
+                    }}
+                    className="flex-1 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddDetailSubtask}
+                    className="px-3.5 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 text-xs font-bold cursor-pointer shrink-0"
+                  >
+                    + Subtarea
+                  </button>
+                </div>
+
+                {detailSubtasks.length > 0 && (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {detailSubtasks.map((st) => (
+                      <div
+                        key={st.id}
+                        className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-black/35 border border-slate-200/80 dark:border-white/[0.06] text-xs"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetailSubtasks((prev) =>
+                              prev.map((item) => (item.id === st.id ? { ...item, done: !item.done } : item))
+                            )
+                          }
+                          className="flex items-center gap-2 text-left flex-1 cursor-pointer"
+                        >
+                          {st.done ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          )}
+                          <span
+                            className={
+                              st.done
+                                ? 'line-through text-slate-400 dark:text-slate-500'
+                                : 'text-slate-800 dark:text-slate-200'
+                            }
+                          >
+                            {st.text}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetailSubtasks((prev) => prev.filter((item) => item.id !== st.id))
+                          }
+                          className="text-slate-400 hover:text-rose-500 cursor-pointer p-0.5"
+                          title="Quitar subtarea"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-white/[0.06]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteTask(detailTaskId);
+                    setDetailTaskId(null);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Eliminar</span>
+                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTaskId(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 text-white text-xs font-bold shadow-md cursor-pointer"
+                  >
+                    Guardar Cambios
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

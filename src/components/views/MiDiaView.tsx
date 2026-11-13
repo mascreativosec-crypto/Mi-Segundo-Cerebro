@@ -27,6 +27,7 @@ import {
   Clock,
   Bot,
 } from 'lucide-react';
+import { MobileCollapsibleCard } from '../shared/MobileCollapsibleCard';
 
 interface MiDiaViewProps {
   data: AppStoreData;
@@ -445,14 +446,14 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
   return (
     <div className="space-y-6">
       {/* 1. Executive Header */}
-      <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="flex items-start sm:items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 via-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/25 shrink-0">
-              <Compass className="w-6 h-6 stroke-[2.2]" />
+      <div className="p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-5">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-teal-500 via-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/25 shrink-0">
+              <Compass className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
-            <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <div className="space-y-0.5 sm:space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
                 <span>{formattedDate}</span>
                 <span aria-hidden="true">·</span>
                 <span className="tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold">
@@ -460,13 +461,13 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="tabular-nums">
-                  {pendingTodayTasks.length} {pendingTodayTasks.length === 1 ? 'tarea pendiente hoy' : 'tareas pendientes hoy'}
+                  {pendingTodayTasks.length} {pendingTodayTasks.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              <h1 className="text-lg sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
                 Mi Día — Centro de Acción
               </h1>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
+              <p className="hidden sm:block text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl">
                 {data.superMorning.intention ||
                   data.profile.dailyIntention ||
                   'Enfócate en lo esencial y ejecuta sin saturación.'}
@@ -474,33 +475,34 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:flex lg:flex-wrap lg:items-center lg:gap-2.5 shrink-0">
             <button
               onClick={onOpenQuickCapture}
-              className="px-4 py-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold text-xs rounded-2xl shadow-md shadow-emerald-500/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Captura Rápida</span>
+              <Plus className="w-3.5 h-3.5 lg:w-4 lg:h-4 stroke-[2.5] shrink-0" />
+              <span className="lg:hidden">Capturar</span>
+              <span className="hidden lg:inline">Captura Rápida</span>
             </button>
             <button
               onClick={() => onNavigate('ai_assistant')}
-              className="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-xs rounded-2xl shadow-md shadow-cyan-500/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
-              <Bot className="w-4 h-4" />
+              <Bot className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
               <span>Asistente IA</span>
             </button>
             <button
               onClick={() => onNavigate('mindset')}
-              className="px-4 py-2.5 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] border border-slate-200/80 dark:border-white/[0.08] text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-2xl flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
+              className="px-2.5 py-2.5 lg:px-4 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] border border-slate-200/80 dark:border-white/[0.08] text-slate-700 dark:text-slate-200 font-semibold text-[11px] lg:text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
             >
-              <Sparkles className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+              <Sparkles className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
               <span>IA Coach</span>
             </button>
           </div>
         </div>
 
         {/* Minimal full-width progress track */}
-        <div className="mt-5 h-1.5 w-full bg-slate-200/80 dark:bg-white/[0.06] rounded-full overflow-hidden">
+        <div className="mt-3 sm:mt-5 h-1.5 w-full bg-slate-200/80 dark:bg-white/[0.06] rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-teal-500 via-emerald-500 to-green-400 rounded-full transition-all duration-500"
             style={{ width: `${executionScore}%` }}
@@ -509,32 +511,33 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
       </div>
 
       {/* 2. 4 Essential Daily Indicators (Finanzas Hoy is larger with Quick Payment button; Físico & Agua on the right) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
         {/* KPI 1: Tareas Pendientes */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => onNavigate('tasks_general')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('tasks_general')}
-          className="p-5 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-teal-500/50 dark:hover:border-teal-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-teal-500/50 dark:hover:border-teal-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-teal-500/20">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-teal-500/20 shrink-0">
                 <CheckSquare className="w-4 h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                Tareas Pendientes
+              <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                <span className="sm:hidden">Tareas</span>
+                <span className="hidden sm:inline">Tareas Pendientes</span>
               </span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
 
           <div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+            <div className="text-lg sm:text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
               {activeTasks.length} {activeTasks.length === 1 ? 'pendiente' : 'pendientes'}
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
               {overdueTasks.length > 0 ? (
                 <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
@@ -544,11 +547,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 <span>{urgentPendingTasks.length} urgentes</span>
               )}
               <span aria-hidden="true">·</span>
-              <span>{pendingTodayTasks.length} para hoy</span>
+              <span>{pendingTodayTasks.length} hoy</span>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-teal-600 dark:text-teal-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-teal-600 dark:text-teal-400">
             Completar o crear tarea
           </div>
         </div>
@@ -559,32 +562,33 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('habits_goals')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('habits_goals')}
-          className="p-5 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-rose-500/50 dark:hover:border-rose-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-rose-500/50 dark:hover:border-rose-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-500 flex items-center justify-center text-white shadow-sm shadow-rose-500/20">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-500 flex items-center justify-center text-white shadow-sm shadow-rose-500/20 shrink-0">
                 <Flame className="w-4 h-4" />
               </div>
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                Hábitos Cumplidos
+              <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                <span className="sm:hidden">Hábitos</span>
+                <span className="hidden sm:inline">Hábitos Cumplidos</span>
               </span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-rose-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-rose-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
 
           <div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
-              {habitsDoneToday.length}/{activeHabits.length} cumplidos
+            <div className="text-lg sm:text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+              {habitsDoneToday.length}/{activeHabits.length} <span className="hidden sm:inline">cumplidos</span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
               {pendingHabits.length > 0
                 ? `Falta: ${pendingHabits[0].title}`
                 : 'Todos los hábitos de hoy completos'}
             </p>
           </div>
 
-          <div className="pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-rose-600 dark:text-rose-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-rose-600 dark:text-rose-400">
             Marcar hábitos y metas
           </div>
         </div>
@@ -595,11 +599,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('personal_finances')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('personal_finances')}
-          className="sm:col-span-2 lg:col-span-2 p-5 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-emerald-500/50 dark:hover:border-emerald-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+          className="col-span-2 lg:col-span-2 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-emerald-500/50 dark:hover:border-emerald-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20">
                 <DollarSign className="w-4 h-4" />
               </div>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
@@ -616,21 +620,22 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
               className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Registrar pago rápido</span>
+              <span className="sm:hidden">Pago rápido</span>
+              <span className="hidden sm:inline">Registrar pago rápido</span>
             </button>
           </div>
 
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-2 sm:gap-3">
             <div>
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
                 Liquidez bancaria disponible
               </span>
-              <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+              <div className="text-xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
                 ${totalLiquidity.toLocaleString()}
               </div>
             </div>
 
-            <div className="text-xs text-slate-500 dark:text-slate-400 tabular-nums text-left sm:text-right">
+            <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 tabular-nums text-left sm:text-right">
               <div className="font-semibold text-rose-600 dark:text-rose-400">
                 {openDebtsCount} deudas · ${totalDebtRemaining.toLocaleString()}
               </div>
@@ -638,7 +643,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-200/70 dark:border-white/[0.06] flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="hidden sm:flex pt-2 border-t border-slate-200/70 dark:border-white/[0.06] items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
             <span>Abrir panel completo de finanzas</span>
             <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </div>
@@ -650,11 +655,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('physical_trainer')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('physical_trainer')}
-          className="p-5 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-lime-500/50 dark:hover:border-lime-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500"
+          className="col-span-2 sm:col-span-1 lg:col-span-1 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-lime-500/50 dark:hover:border-lime-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-lime-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-lime-500/20">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-lime-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-lime-500/20">
                 <Dumbbell className="w-4 h-4" />
               </div>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
@@ -672,14 +677,14 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </button>
           </div>
 
-          <div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
+          <div className="flex items-baseline justify-between sm:block gap-2">
+            <div className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tabular-nums tracking-tight">
               {waterLiters.toFixed(2)} L{' '}
               <span className="text-xs font-semibold text-slate-400">
                 / {targetWaterLiters} L
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 truncate">
               {workoutCompletedToday
                 ? 'Entrenamiento completado'
                 : nextWorkout
@@ -688,7 +693,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </p>
           </div>
 
-          <div className="pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-lime-700 dark:text-lime-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-lime-700 dark:text-lime-400">
             Entreno y sueño ({data.nutritionLog.sleepHours}h)
           </div>
         </div>
@@ -699,11 +704,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
         {/* Left Column (7 cols): Compact Súper Mañana / Súper Noche + Agenda de Mi Día */}
         <div className="lg:col-span-7 space-y-6">
           {/* Compact 2-block quick access for Súper Mañana & Súper Noche (no empty space) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={() => onNavigate('super_morning')}
-              className="p-3.5 rounded-2xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-amber-500/50 dark:hover:border-amber-400/50 shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-2.5 text-left cursor-pointer group"
+              className="p-3 sm:p-3.5 rounded-2xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-amber-500/50 dark:hover:border-amber-400/50 shadow-sm hover:shadow-md transition-all flex items-center justify-between gap-2 text-left cursor-pointer group"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-sm shadow-amber-500/20 shrink-0 group-hover:scale-105 transition-transform">
@@ -769,7 +774,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2">
                 <div className="p-1 rounded-xl bg-slate-100 dark:bg-black/40 border border-slate-200/70 dark:border-white/[0.06] flex items-center gap-1 text-xs font-semibold">
                   <button
                     type="button"
@@ -1022,146 +1027,168 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           </div>
 
           {/* Card 2: Mentalidad & IA Coach (Clean, without mixed general day reminders) */}
-          <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20 shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-                    Mentalidad & IA Coach
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {mindsetSource}
-                  </p>
-                </div>
+          <MobileCollapsibleCard
+            title="Mentalidad & IA Coach"
+            summary={mindsetSource}
+            icon={
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-sky-500 via-blue-500 to-indigo-600 flex items-center justify-center text-white">
+                <Sparkles className="w-4 h-4" />
               </div>
-
-              <button
-                type="button"
-                onClick={handleRefreshMindsetReminder}
-                disabled={isRefreshingMindset}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-white/[0.06] hover:bg-sky-500/15 text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-                title="Generar nueva frase motivacional"
-              >
-                <RefreshCw className={`w-4 h-4 ${isRefreshingMindset ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-500/[0.08] to-indigo-500/[0.06] border border-sky-500/20 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-700 dark:text-sky-300">
-                <Quote className="w-3.5 h-3.5" />
-                <span>Frase & Enfoque IA</span>
-              </div>
-              <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 leading-relaxed">
-                "{mindsetMessage}"
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onNavigate('mindset')}
-              className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer active:scale-[0.99]"
-            >
-              <span>Abrir Mentalidad & Asesor IA</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Card 3: Biblioteca de Sabiduría — Acceso & Extracto de Lectura */}
-          <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-yellow-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-                    Biblioteca de Sabiduría
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Extracto diario & lectura activa
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => onNavigate('wisdom_library')}
-                className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                <span>Ir al módulo</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {readingBook && (
-              <div
-                onClick={() => onNavigate('wisdom_library')}
-                className="p-4 rounded-2xl bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] hover:border-amber-500/40 transition-colors cursor-pointer space-y-2.5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                      {readingBook.title}
-                    </p>
+            }
+            defaultOpenMobile={false}
+          >
+            <div className="p-4 lg:p-6 rounded-none lg:rounded-3xl lg:backdrop-blur-2xl lg:bg-white/80 lg:dark:bg-slate-900/60 lg:border lg:border-slate-200/80 lg:dark:border-white/[0.08] lg:shadow-lg lg:dark:shadow-2xl space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                      Mentalidad & IA Coach
+                    </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {readingBook.author} · {readingBook.category}
+                      {mindsetSource}
                     </p>
                   </div>
-                  <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 tabular-nums shrink-0">
-                    {readingProgress}%
-                  </span>
                 </div>
 
-                <div className="h-1.5 w-full bg-slate-200 dark:bg-white/[0.08] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-500 to-amber-500 rounded-full"
-                    style={{ width: `${readingProgress}%` }}
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
-                  Página {readingBook.currentPage} de {readingBook.totalPages}
-                </p>
+                <button
+                  type="button"
+                  onClick={handleRefreshMindsetReminder}
+                  disabled={isRefreshingMindset}
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-white/[0.06] hover:bg-sky-500/15 text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                  title="Generar nueva frase motivacional"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isRefreshingMindset ? 'animate-spin' : ''}`} />
+                </button>
               </div>
-            )}
 
-            {latestCapsule ? (
-              <div className="p-4 rounded-2xl bg-amber-500/[0.07] border border-amber-500/20 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
-                  <span>Extracto de Lectura</span>
-                  <span className="tabular-nums font-medium">{latestCapsule.pageRef}</span>
+              <div className="p-3.5 lg:p-4 rounded-2xl bg-gradient-to-br from-sky-500/[0.08] to-indigo-500/[0.06] border border-sky-500/20 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-700 dark:text-sky-300">
+                  <Quote className="w-3.5 h-3.5" />
+                  <span>Frase & Enfoque IA</span>
                 </div>
-                <p className="text-xs sm:text-sm italic text-slate-800 dark:text-slate-100 leading-relaxed">
-                  "{latestCapsule.quote}"
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  <span className="font-semibold text-slate-800 dark:text-white">Acción hoy: </span>
-                  {latestCapsule.practicalAction}
+                <p className="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 leading-relaxed">
+                  "{mindsetMessage}"
                 </p>
               </div>
-            ) : (
-              readingBook?.quotes?.[0] && (
-                <div className="p-4 rounded-2xl bg-amber-500/[0.07] border border-amber-500/20 space-y-1.5">
-                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
-                    Cita destacada · {readingBook.quotes[0].page || 'Lectura'}
+
+              <button
+                type="button"
+                onClick={() => onNavigate('mindset')}
+                className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer active:scale-[0.99]"
+              >
+                <span>Abrir Mentalidad & Asesor IA</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </button>
+            </div>
+          </MobileCollapsibleCard>
+
+          {/* Card 3: Biblioteca de Sabiduría — Acceso & Extracto de Lectura */}
+          <MobileCollapsibleCard
+            title="Biblioteca de Sabiduría"
+            summary={readingBook ? `${readingBook.title} · ${readingProgress}%` : 'Lectura y cápsulas de hoy'}
+            icon={
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-yellow-500 to-amber-600 flex items-center justify-center text-white">
+                <BookOpen className="w-4 h-4" />
+              </div>
+            }
+            defaultOpenMobile={false}
+          >
+            <div className="p-4 lg:p-6 rounded-none lg:rounded-3xl lg:backdrop-blur-2xl lg:bg-white/80 lg:dark:bg-slate-900/60 lg:border lg:border-slate-200/80 lg:dark:border-white/[0.08] lg:shadow-lg lg:dark:shadow-2xl space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-yellow-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                      Biblioteca de Sabiduría
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Extracto diario & lectura activa
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('wisdom_library')}
+                  className="text-xs font-semibold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  <span>Ir al módulo</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {readingBook && (
+                <div
+                  onClick={() => onNavigate('wisdom_library')}
+                  className="p-3.5 lg:p-4 rounded-2xl bg-slate-100/80 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] hover:border-amber-500/40 transition-colors cursor-pointer space-y-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                        {readingBook.title}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {readingBook.author} · {readingBook.category}
+                      </p>
+                    </div>
+                    <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 tabular-nums shrink-0">
+                      {readingProgress}%
+                    </span>
+                  </div>
+
+                  <div className="h-1.5 w-full bg-slate-200 dark:bg-white/[0.08] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-yellow-500 to-amber-500 rounded-full"
+                      style={{ width: `${readingProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                    Página {readingBook.currentPage} de {readingBook.totalPages}
                   </p>
+                </div>
+              )}
+
+              {latestCapsule ? (
+                <div className="p-3.5 lg:p-4 rounded-2xl bg-amber-500/[0.07] border border-amber-500/20 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
+                    <span>Extracto de Lectura</span>
+                    <span className="tabular-nums font-medium">{latestCapsule.pageRef}</span>
+                  </div>
                   <p className="text-xs sm:text-sm italic text-slate-800 dark:text-slate-100 leading-relaxed">
-                    "{readingBook.quotes[0].text}"
+                    "{latestCapsule.quote}"
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    <span className="font-semibold text-slate-800 dark:text-white">Acción hoy: </span>
+                    {latestCapsule.practicalAction}
                   </p>
                 </div>
-              )
-            )}
+              ) : (
+                readingBook?.quotes?.[0] && (
+                  <div className="p-3.5 lg:p-4 rounded-2xl bg-amber-500/[0.07] border border-amber-500/20 space-y-1.5">
+                    <p className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                      Cita destacada · {readingBook.quotes[0].page || 'Lectura'}
+                    </p>
+                    <p className="text-xs sm:text-sm italic text-slate-800 dark:text-slate-100 leading-relaxed">
+                      "{readingBook.quotes[0].text}"
+                    </p>
+                  </div>
+                )
+              )}
 
-            <button
-              type="button"
-              onClick={() => onNavigate('wisdom_library')}
-              className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 dark:bg-white/[0.06] hover:bg-amber-500/15 border border-slate-200/80 dark:border-white/[0.08] hover:border-amber-500/40 text-slate-800 dark:text-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-            >
-              <span>Registrar lectura o cápsula de sabiduría</span>
-              <ArrowUpRight className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('wisdom_library')}
+                className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 dark:bg-white/[0.06] hover:bg-amber-500/15 border border-slate-200/80 dark:border-white/[0.08] hover:border-amber-500/40 text-slate-800 dark:text-slate-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>Registrar lectura o cápsula de sabiduría</span>
+                <ArrowUpRight className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </button>
+            </div>
+          </MobileCollapsibleCard>
         </div>
       </div>
     </div>
