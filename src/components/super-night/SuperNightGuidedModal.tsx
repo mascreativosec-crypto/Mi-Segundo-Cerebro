@@ -115,7 +115,7 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
   const warnedRef = useRef(false);
 
   useEffect(() => {
-    zenAudio.playDawnBell();
+    zenAudio.playNightCalmBell();
     appNotifications.send('Iniciando Súper Noche', {
       body: `Fase 1: ${STEPS[0].title}`,
     });
@@ -129,7 +129,7 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
 
       setCurrentStepSecondsLeft((prev) => {
         if (prev === 11 && !warnedRef.current) {
-          zenAudio.playWarningTick();
+          zenAudio.playNightSoftTick();
           warnedRef.current = true;
         }
 
@@ -151,14 +151,14 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
       setCurrentIndex(nextIdx);
       const nextDuration = getStepDuration(nextIdx);
       setCurrentStepSecondsLeft(nextDuration);
-      zenAudio.playTransitionChime();
+      zenAudio.playNightTransitionChime();
       appNotifications.send(`Paso ${nextIdx + 1} de ${STEPS.length}`, {
         body: STEPS[nextIdx].title,
       });
     } else {
       setIsCompleted(true);
       setIsRunning(false);
-      zenAudio.playFinishGong();
+      zenAudio.playNightSleepPad();
       try {
         confetti({
           particleCount: 120,
@@ -188,8 +188,8 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
     zenAudio.setSoundEnabled(nextVal);
   };
 
-  const handleAddExtraTime = (seconds: number) => {
-    setCurrentStepSecondsLeft((prev) => prev + seconds);
+  const handleAdjustTime = (deltaSeconds: number) => {
+    setCurrentStepSecondsLeft((prev) => Math.max(5, prev + deltaSeconds));
   };
 
   const handleToggleVerbal = (id: string) => {
@@ -203,9 +203,9 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
     const nextVal = Math.min(30, current + 1);
     setLocalReview({ ...localReview, subconsciousRequestCount: nextVal });
     if (nextVal === 30) {
-      zenAudio.playFinishGong();
+      zenAudio.playNightSleepPad();
     } else {
-      zenAudio.playWarningTick();
+      zenAudio.playNightSoftTick();
     }
   };
 
@@ -275,7 +275,7 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
     ? Math.max(0, Math.min(100, Math.round(((stepTotalDuration - currentStepSecondsLeft) / stepTotalDuration) * 100)))
     : 0;
 
-  const radius = 72;
+  const radius = 92;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (circumference * progressPercent) / 100;
   const StepIcon = currentStep.icon;
@@ -381,41 +381,61 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
           <div className="p-6 overflow-y-auto space-y-6">
             {/* Split: Timer & Step Details */}
             <div className="flex flex-col md:flex-row items-center gap-6 p-6 rounded-3xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/80 dark:border-purple-500/20">
-              {/* Circular SVG Timer */}
-              <div className="relative w-44 h-44 flex items-center justify-center shrink-0">
-                <svg className="w-44 h-44 transform -rotate-90">
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r={radius}
-                    stroke="rgba(168, 85, 247, 0.15)"
-                    strokeWidth="8"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r={radius}
-                    stroke="#a855f7"
-                    strokeWidth="8"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    className="transition-all duration-300"
-                  />
-                </svg>
+              {/* Enlarged Circular SVG Timer with ±15s controls */}
+              <div className="flex flex-col items-center gap-3 shrink-0">
+                <div className="relative w-56 h-56 flex items-center justify-center">
+                  <svg className="w-56 h-56 transform -rotate-90">
+                    <circle
+                      cx="112"
+                      cy="112"
+                      r={radius}
+                      stroke="rgba(168, 85, 247, 0.15)"
+                      strokeWidth="10"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="112"
+                      cy="112"
+                      r={radius}
+                      stroke="#a855f7"
+                      strokeWidth="10"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                      fill="transparent"
+                      className="transition-all duration-300"
+                    />
+                  </svg>
 
-                <div className="absolute flex flex-col items-center justify-center text-center">
-                  <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                    {formatTime(currentStepSecondsLeft)}
-                  </span>
-                  <span className="text-xs text-purple-700 dark:text-purple-300 font-semibold mt-0.5">
-                    {progressPercent}% completado
-                  </span>
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                      {formatTime(currentStepSecondsLeft)}
+                    </span>
+                    <span className="text-xs text-purple-700 dark:text-purple-300 font-semibold mt-1">
+                      {progressPercent}% completado
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleAddExtraTime(60)}
-                    className="text-xs text-slate-400 hover:text-purple-600 mt-1 cursor-pointer font-medium"
+                    type="button"
+                    onClick={() => handleAdjustTime(-15)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-purple-500/30 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                  >
+                    -15s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(15)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-purple-500/30 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+                  >
+                    +15s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(60)}
+                    className="px-2.5 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-xs font-bold text-purple-700 dark:text-purple-300 cursor-pointer"
                   >
                     +1 min
                   </button>
@@ -451,11 +471,12 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
                     ¿Cuál fue tu mayor victoria o conquista interna hoy?
                   </label>
                   <textarea
-                    rows={3}
+                    rows={5}
+                    maxLength={7500}
                     value={localReview.mainVictory || ''}
                     onChange={(e) => setLocalReview({ ...localReview, mainVictory: e.target.value })}
                     placeholder="Escribe tu victoria más clara hoy..."
-                    className="w-full bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none leading-relaxed"
+                    className="w-full min-h-[120px] bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                   />
                 </div>
               )}
@@ -468,11 +489,12 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
                       Momento de Magia / Sincronicidad
                     </label>
                     <textarea
-                      rows={3}
+                      rows={5}
+                      maxLength={7500}
                       value={localReview.magicMoment || ''}
                       onChange={(e) => setLocalReview({ ...localReview, magicMoment: e.target.value })}
                       placeholder="Momento de magia y sincronicidad..."
-                      className="w-full bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                      className="w-full min-h-[120px] bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                     />
                   </div>
 
@@ -481,11 +503,12 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
                       Sentido de Tikún & Responsabilidad
                     </label>
                     <textarea
-                      rows={3}
+                      rows={5}
+                      maxLength={7500}
                       value={localReview.tikunReflection || ''}
                       onChange={(e) => setLocalReview({ ...localReview, tikunReflection: e.target.value })}
                       placeholder="Personas que dependen de que yo no falle..."
-                      className="w-full bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                      className="w-full min-h-[120px] bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                     />
                   </div>
                 </div>
@@ -682,11 +705,12 @@ export const SuperNightGuidedModal: React.FC<SuperNightGuidedModalProps> = ({
                       Conclusión del Día & Paz Invencible
                     </label>
                     <textarea
-                      rows={3}
+                      rows={5}
+                      maxLength={7500}
                       value={localReview.dayConclusion || ''}
                       onChange={(e) => setLocalReview({ ...localReview, dayConclusion: e.target.value })}
                       placeholder="Cierra tu jornada en paz..."
-                      className="w-full bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none leading-relaxed"
+                      className="w-full min-h-[120px] bg-white dark:bg-black/50 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                     />
                   </div>
                 </div>

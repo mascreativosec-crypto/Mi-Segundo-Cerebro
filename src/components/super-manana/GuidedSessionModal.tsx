@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Sparkles,
+  Dumbbell,
 } from 'lucide-react';
 
 interface GuidedSessionModalProps {
@@ -24,6 +25,8 @@ interface GuidedSessionModalProps {
   mode: RoutineMode;
   onClose: () => void;
   onFinishSession: (responses: Record<string, Record<string, any>>, totalSeconds: number) => void;
+  aiQuotes?: Record<string, string>;
+  onOpenPhysicalTrainer?: () => void;
 }
 
 export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
@@ -31,6 +34,8 @@ export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
   mode,
   onClose,
   onFinishSession,
+  aiQuotes = {},
+  onOpenPhysicalTrainer,
 }) => {
   const activeHabits = habits.filter((h) => h.enabled);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -148,8 +153,8 @@ export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
     zenAudio.setSoundEnabled(nextVal);
   };
 
-  const handleAddExtraTime = (seconds: number) => {
-    setCurrentStepSecondsLeft((prev) => prev + seconds);
+  const handleAdjustTime = (deltaSeconds: number) => {
+    setCurrentStepSecondsLeft((prev) => Math.max(5, prev + deltaSeconds));
   };
 
   const handleFinish = () => {
@@ -163,12 +168,12 @@ export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${remSecs.toString().padStart(2, '0')}`;
   };
 
-  // Circular progress math
+  // Circular progress math (Larger timer ring)
   const progressPercent = stepTotalDuration > 0
     ? Math.max(0, Math.min(100, Math.round(((stepTotalDuration - currentStepSecondsLeft) / stepTotalDuration) * 100)))
     : 0;
 
-  const radius = 72;
+  const radius = 92;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (circumference * progressPercent) / 100;
 
@@ -273,41 +278,61 @@ export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
           <div className="p-6 overflow-y-auto space-y-6">
             {/* Split: Timer & Habit Identity */}
             <div className="flex flex-col md:flex-row items-center gap-6 p-6 rounded-3xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/80 dark:border-amber-500/20">
-              {/* Circular SVG Timer */}
-              <div className="relative w-44 h-44 flex items-center justify-center shrink-0">
-                <svg className="w-44 h-44 transform -rotate-90">
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r={radius}
-                    stroke="rgba(245, 158, 11, 0.15)"
-                    strokeWidth="8"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="88"
-                    cy="88"
-                    r={radius}
-                    stroke="#f59e0b"
-                    strokeWidth="8"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    fill="transparent"
-                    className="transition-all duration-300"
-                  />
-                </svg>
+              {/* Enlarged Circular SVG Timer with -15s / +15s / +1 min controls */}
+              <div className="flex flex-col items-center gap-3 shrink-0">
+                <div className="relative w-56 h-56 flex items-center justify-center">
+                  <svg className="w-56 h-56 transform -rotate-90">
+                    <circle
+                      cx="112"
+                      cy="112"
+                      r={radius}
+                      stroke="rgba(245, 158, 11, 0.15)"
+                      strokeWidth="10"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="112"
+                      cy="112"
+                      r={radius}
+                      stroke="#f59e0b"
+                      strokeWidth="10"
+                      strokeDasharray={circumference}
+                      strokeDashoffset={strokeDashoffset}
+                      strokeLinecap="round"
+                      fill="transparent"
+                      className="transition-all duration-300"
+                    />
+                  </svg>
 
-                <div className="absolute flex flex-col items-center justify-center text-center">
-                  <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                    {formatTime(currentStepSecondsLeft)}
-                  </span>
-                  <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
-                    {progressPercent}% completado
-                  </span>
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <span className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight tabular-nums">
+                      {formatTime(currentStepSecondsLeft)}
+                    </span>
+                    <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold mt-1">
+                      {progressPercent}% completado
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => handleAddExtraTime(60)}
-                    className="text-xs text-slate-400 hover:text-amber-500 mt-1 cursor-pointer font-medium"
+                    type="button"
+                    onClick={() => handleAdjustTime(-15)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/30 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-amber-500 transition-colors cursor-pointer"
+                  >
+                    -15s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(15)}
+                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/30 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-amber-500 transition-colors cursor-pointer"
+                  >
+                    +15s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAdjustTime(60)}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-xs font-bold text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 transition-colors cursor-pointer"
                   >
                     +1 min
                   </button>
@@ -336,6 +361,29 @@ export const GuidedSessionModal: React.FC<GuidedSessionModalProps> = ({
                   <div className="p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/20 text-xs italic text-amber-800 dark:text-amber-200/90 font-serif">
                     "{currentHabit.stoicQuote}"
                   </div>
+                )}
+
+                {currentHabit && aiQuotes[currentHabit.id] && (
+                  <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 text-xs text-indigo-800 dark:text-indigo-200 font-medium">
+                    <span className="text-[10px] font-bold uppercase block text-indigo-600 dark:text-indigo-400 mb-0.5">
+                      Mensaje IA del Día
+                    </span>
+                    "{aiQuotes[currentHabit.id]}"
+                  </div>
+                )}
+
+                {currentHabit?.linkToFitness && onOpenPhysicalTrainer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenPhysicalTrainer();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-500/25 cursor-pointer"
+                  >
+                    <Dumbbell className="w-3.5 h-3.5" />
+                    <span>Abrir Mi Entrenador Físico</span>
+                  </button>
                 )}
               </div>
             </div>

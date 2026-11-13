@@ -21,7 +21,12 @@ import {
   MoodEntry,
   SpiritualJournalEntry,
   PersonalRitualLog,
-  CustomRitual
+  CustomRitual,
+  NoteReminderItem,
+  ScheduleSlot,
+  FitnessActivityLog,
+  CleaningStepItem,
+  PersonalExperiment
 } from '../types';
 
 const STORAGE_KEY = 'msc_4_0_app_data_v1';
@@ -46,14 +51,19 @@ export interface AppStoreData {
   wisdomCapsules: WisdomCapsule[];
   workoutRoutines: WorkoutRoutine[];
   nutritionLog: NutritionHydrationLog;
+  fitnessLogs: FitnessActivityLog[];
   personalFinances: PersonalFinances;
   capturedItems: CapturedBrainItem[];
   notifications: AppNotification[];
+  scheduleSlots: ScheduleSlot[];
   automations: AutomationRule[];
   moodEntries: MoodEntry[];
   spiritualEntries: SpiritualJournalEntry[];
   personalLogs: PersonalRitualLog[];
+  cleaningSteps: CleaningStepItem[];
   customRituals: CustomRitual[];
+  notesReminders: NoteReminderItem[];
+  personalExperiments: PersonalExperiment[];
 }
 
 const getTodayDateStr = () => new Date().toISOString().split('T')[0];
@@ -89,6 +99,8 @@ export const initialStoreData: AppStoreData = {
       title: 'Escalar ingresos netos de negocios a $50k/mes manteniendo márgenes > 40%',
       horizon: 'annual',
       pillar: 'financiero',
+      businessId: 'biz_1',
+      projectId: 'proj_1',
       targetDate: '2026-12-31',
       progressPercent: 68,
       status: 'in_progress',
@@ -117,6 +129,8 @@ export const initialStoreData: AppStoreData = {
       title: 'Consolidar sistema de dirección delegada en empresas para liberar 15h semanales',
       horizon: 'annual',
       pillar: 'intelectual',
+      businessId: 'biz_1',
+      projectId: 'proj_2',
       targetDate: '2026-09-30',
       progressPercent: 55,
       status: 'in_progress',
@@ -319,6 +333,7 @@ export const initialStoreData: AppStoreData = {
     {
       id: 'sd_1',
       businessId: 'biz_1',
+      scopeTags: ['business'],
       date: '2026-11-01',
       title: 'Transición hacia modelo de suscripción / retainer garantizado',
       context: 'La volatilidad de proyectos de precio fijo afectaba la previsibilidad de ingresos.',
@@ -487,6 +502,18 @@ export const initialStoreData: AppStoreData = {
     preWorkoutMeal: 'Avena integral con proteína en polvo, plátano y café negro (60-90 min antes)',
     date: getTodayDateStr()
   },
+  fitnessLogs: [
+    {
+      id: 'fl_1',
+      date: getTodayDateStr(),
+      steps: 8420,
+      distanceKm: 6.1,
+      caloriesBurned: 490,
+      activeMinutes: 55,
+      sourceApp: 'Apple Health',
+      notes: 'Sesión de fuerza + caminata post-almuerzo'
+    }
+  ],
   personalFinances: {
     monthlyIncome: 14500,
     monthlyExpenses: 4800,
@@ -622,17 +649,31 @@ export const initialStoreData: AppStoreData = {
     { id: 'notif_2', title: 'Reunión de Estrategia a las 11:30', message: 'Revisión con Sofía Valdés sobre entregables de UI.', category: 'business', timestamp: '11:00', read: false },
     { id: 'notif_3', title: 'Recordatorio de Hidratación', message: 'Llevas 1.75L. Falta 1 vaso para tu meta de 2.0L.', category: 'reminder', timestamp: '13:00', read: false }
   ],
+  scheduleSlots: [
+    { id: 'slot_1', time: '06:30', label: 'Despertar & Súper Mañana', desc: 'Hidratación 500ml, gratitud y fijación de las 3 prioridades.', view: 'super_morning', enabled: true },
+    { id: 'slot_2', time: '07:15', label: 'Mensaje de Activación de Mentalidad', desc: 'Disparo de enfoque y calibración psicológica con IA.', view: 'mindset', enabled: true },
+    { id: 'slot_3', time: '07:30', label: 'Entrenamiento Físico', desc: 'Sesión de sobrecarga progresiva y fuerza funcional.', view: 'physical_trainer', enabled: true },
+    { id: 'slot_4', time: '08:45', label: 'Desayuno & Recuperación', desc: 'Nutrición limpia y alineación con líderes de equipo.', view: 'physical_trainer', enabled: true },
+    { id: 'slot_5', time: '09:00', label: 'Prioridades Empresariales (Deep Work)', desc: 'Bloque ininterrumpido de ejecución de la prioridad #1.', view: 'business', enabled: true },
+    { id: 'slot_6', time: '13:00', label: 'Cápsula Diaria de Sabiduría', desc: 'Nutrición intelectual de libros y síntesis de ideas.', view: 'wisdom_library', enabled: true },
+    { id: 'slot_7', time: '20:30', label: 'Súper Noche & Rendición de Cuentas', desc: 'Evaluación de victorias, aprendizajes y cierre sereno.', view: 'super_night', enabled: true }
+  ],
   automations: [
-    { id: 'auto_1', name: 'Mensaje de Activación Matutina', description: 'Dispara reflexión estratégica y alinea prioridades a las 07:15', triggerTime: '07:15', type: 'activation', enabled: true },
-    { id: 'auto_2', name: 'Alerta de Enfoque Medio Día', description: 'Evalúa avance del 80/20 y desactiva distracciones a las 12:30', triggerTime: '12:30', type: 'focus', enabled: true },
-    { id: 'auto_3', name: 'Cápsula Diaria de Sabiduría', description: 'Extrae una perla intelectual de la biblioteca de libros a las 13:00', triggerTime: '13:00', type: 'capsule', enabled: true },
-    { id: 'auto_4', name: 'Súper Noche & Rendición de Cuentas', description: 'Abre la evaluación del día y gratitud a las 20:30', triggerTime: '20:30', type: 'reflection', enabled: true }
+    { id: 'auto_1', name: 'Mensaje de Activación Matutina', description: 'Dispara reflexión estratégica y alinea prioridades a las 07:15', triggerTime: '07:15', type: 'activation', targetModule: 'super_morning', messageTemplate: 'Inicia tu Súper Mañana: define tus 3 prioridades innegociables.', enabled: true },
+    { id: 'auto_2', name: 'Alerta de Enfoque Medio Día', description: 'Evalúa avance del 80/20 y desactiva distracciones a las 12:30', triggerTime: '12:30', type: 'focus', targetModule: 'mi_dia', messageTemplate: 'Pausa táctica 12:30: ¿qué tarea empresarial clave vas a cerrar antes de las 4 PM?', enabled: true },
+    { id: 'auto_3', name: 'Cápsula Diaria de Sabiduría', description: 'Extrae una perla intelectual de la biblioteca de libros a las 13:00', triggerTime: '13:00', type: 'capsule', targetModule: 'wisdom_library', messageTemplate: 'Hora de nutrir tu intelecto: registra 15 minutos de lectura y tu cápsula del día.', enabled: true },
+    { id: 'auto_4', name: 'Súper Noche & Rendición de Cuentas', description: 'Abre la evaluación del día y gratitud a las 20:30', triggerTime: '20:30', type: 'reflection', targetModule: 'super_night', messageTemplate: 'Cierre de jornada: registra tus victorias, aprendizajes y prepara mañana.', enabled: true }
   ],
   moodEntries: [
     {
       id: 'me_1',
       date: getTodayDateStr(),
+      timestamp: new Date().toISOString(),
       score: 5,
+      valence_score: 0.72,
+      display_label: 'Agradable',
+      emotion_labels: ['Entusiasmado', 'Sereno', 'Agradecido'],
+      associations: ['Trabajo', 'Salud', 'Rutina Matutina'],
       moodLabel: 'Determinado y Sereno',
       primaryEmotion: 'Determinación',
       triggers: 'Rutina matutina cumplida a tiempo y claridad de prioridades de negocio.',
@@ -675,44 +716,274 @@ export const initialStoreData: AppStoreData = {
       actionTaken: 'archived'
     }
   ],
+  cleaningSteps: [
+    {
+      id: 'step_1',
+      phase: 'Fase 1 · Ventilación & Luz',
+      title: 'Oxigenar el Espacio y Activar el Entorno',
+      description: 'Abre las ventanas de par en par, sube las persianas al máximo y deja que la luz y el aire fresco renueven la energía de tu cuarto.',
+      tips: [
+        'Abre la ventana y la puerta para crear corriente de aire cruzado.',
+        'Pon una lista de música suave o instrumental.',
+        'Toma un vaso de agua antes de iniciar el movimiento físico.'
+      ]
+    },
+    {
+      id: 'step_2',
+      phase: 'Fase 2 · Superficies Clave',
+      title: 'Hacer la Cama & Vaciar el Escritorio',
+      description: 'La cama es el ancla visual de tu habitación y el escritorio es el ancla de tu mente. Despejarlos produce el 80% del impacto visual en 5 minutos.',
+      tips: [
+        'Tiende la cama estirando bien las sábanas y almohadas.',
+        'Lleva toda vajilla, tazas de café o vasos a la cocina de inmediato.',
+        'Retira papeles, recibos o envoltorios sueltos del escritorio.'
+      ]
+    },
+    {
+      id: 'step_3',
+      phase: 'Fase 3 · Método de 3 Destinos',
+      title: 'Clasificación Rápida y sin Titubeos',
+      description: 'No te detengas a recordar anécdotas. Todo lo que esté fuera de lugar va a uno de 3 destinos: a su sitio, a donar/mover, o a la papelera.',
+      tips: [
+        'Ropa limpia colgada o guardada; ropa sucia directo al cesto.',
+        'Tira a la basura todo objeto roto, empaque o nota que ya no sirva.',
+        'Devuelve a cada objeto a su lugar asignado.'
+      ]
+    },
+    {
+      id: 'step_4',
+      phase: 'Fase 4 · Armonización & Sellado',
+      title: 'Sensación de Santuario y Paz Visual',
+      description: 'El toque final que transforma una simple limpieza en un ritual de autocuidado y respeto por tu propia energía.',
+      tips: [
+        'Alinea cables, teclado y silla de trabajo.',
+        'Aplica una gota de aceite esencial, enciende incienso o ventila un aroma relajante.',
+        'Párate en la puerta, respira profundo y contempla tu santuario en orden.'
+      ]
+    }
+  ],
   customRituals: [
     {
-      id: 'cr_1',
-      title: 'Ritual de Limpieza de mi Cuarto',
-      description: 'Espacio físico ordenado es mente despejada. 15 minutos de reseteo visual y sensorial.',
-      durationMinutes: 15,
-      icon: 'Home',
-      steps: [
-        'Abrir ventanas y permitir entrada de luz natural y aire fresco.',
-        'Hacer la cama impecable y despejar completamente las superficies.',
-        'Guardar o clasificar la ropa y objetos fuera de lugar.',
-        'Toque final: ordenar cables y aroma agradable para sellar la paz.'
-      ]
-    },
-    {
-      id: 'cr_2',
-      title: 'Vómito de Pensamientos (Brain Dump)',
-      description: 'Descarga mental sin filtros. Escribe todo lo que abruma tu mente hasta sentir ligereza.',
-      durationMinutes: 10,
+      id: 'cr_skincare',
+      title: 'Ritual de Skincare Masculino & Cuidado Facial',
+      description: 'Protocolo diario AM/PM de limpieza, hidratación y protección para proyectar vitalidad y presencia.',
+      durationMinutes: 8,
       icon: 'Sparkles',
       steps: [
-        'Pon tu teléfono en modo no molestar y respira profundo 3 veces.',
-        'Escribe en flujo continuo sin corregir ortografía ni censurarte.',
-        'Pregúntate: ¿Qué pendiente no me deja estar presente?',
-        'Elige: ¿Archivar en notas, convertir en tarea o quemar simbólicamente?'
+        'Limpieza facial con gel suave y agua tibia (60 seg).',
+        'Aplicación de sérum antioxidante / niacinamida.',
+        'Crema hidratante y protector solar FPS 50+ (AM) o reparador nocturno (PM).'
+      ],
+      phases: [
+        {
+          id: 'sk_1',
+          title: 'Preparación y Limpieza Profunda',
+          subtitle: 'Elimina impurezas sin resecar la barrera cutánea',
+          durationMinutes: 3,
+          instructions: ['Lava tus manos primero.', 'Masajea el limpiador 60 segundos en movimientos circulares y enjuaga con agua fresca.'],
+          fields: [
+            {
+              id: 'sk_moment',
+              type: 'checkboxes',
+              label: 'Pasos completados',
+              options: ['Limpiador facial suave', 'Contorno de ojos', 'Sérum hidratante / Vitamina C', 'Crema hidratante', 'Protector solar FPS 50+']
+            }
+          ]
+        },
+        {
+          id: 'sk_2',
+          title: 'Estado de Piel & Notas',
+          subtitle: 'Seguimiento breve de constancia y productos',
+          durationMinutes: 2,
+          instructions: ['Observa nivel de hidratación o irritación tras afeitado.'],
+          fields: [
+            { id: 'sk_note', type: 'text', label: 'Nota o producto a reponer', placeholder: 'Ej: Excelente absorción, reponer protector solar la próxima semana' }
+          ]
+        }
       ]
+    }
+  ],
+  notesReminders: [
+    {
+      id: 'nr_1',
+      title: 'Intención de Súper Mañana',
+      content: 'Foco implacable en el cierre de alianzas estratégicas y energía calmada en cada interacción.',
+      category: 'super_manana',
+      originModule: 'super_manana',
+      targetView: 'super_morning',
+      reminderTime: '07:30',
+      reminderDate: getTodayDateStr(),
+      showInMiDia: true,
+      completed: false,
+      pinned: true,
+      source: 'super_morning',
+      createdAt: new Date().toISOString(),
     },
     {
-      id: 'cr_3',
-      title: 'Reset Mental & Recarga de Energía',
-      description: 'Pausa cuántica de 3 minutos para soltar el estrés simpático y reconectar con el presente.',
-      durationMinutes: 3,
-      icon: 'Wind',
-      steps: [
-        'Cierra los ojos y suelta la tensión en hombros y mandíbula.',
-        'Ciclo de respiración profunda: 4 segundos inhalar, 7 sostener, 8 exhalar.',
-        'Agradece este instante y retoma tu centro.'
-      ]
+      id: 'nr_2',
+      title: 'Confirmar firma de contrato y flujo semanal',
+      content: 'Revisar borrador final antes de las 16:00 y confirmar transferencia con contabilidad.',
+      category: 'tarea',
+      originModule: 'business',
+      targetView: 'business',
+      reminderTime: '15:00',
+      reminderDate: getTodayDateStr(),
+      showInMiDia: true,
+      completed: false,
+      pinned: false,
+      source: 'user',
+      createdAt: new Date().toISOString(),
+    }
+  ],
+  personalExperiments: [
+    {
+      id: 'exp_isra_1',
+      title: 'Incomodidad Voluntaria & Cero Excusas (21 Días)',
+      inspiration: 'Isra García',
+      inspirationColor: 'indigo',
+      pillar: 'fisico',
+      goalDescription: 'Forjar autodisciplina diaria eliminando excusas matutinas y sosteniendo foco ininterrumpido.',
+      hypothesis: 'Si elimino el confort matutino, el azúcar y las distracciones digitales antes de las 10:00 AM, mi claridad mental y capacidad de ejecución se duplicarán.',
+      purpose: 'Forjar autodisciplina extrema mediante micro-choques diarios medibles sin depender de la motivación.',
+      durationDays: 21,
+      startDate: '2026-11-01',
+      status: 'active',
+      dailySubtasks: [
+        'Ducha fría 2 minutos al despertar',
+        'Primer bloque Deep Work de 60 min sin móvil',
+        'Alimentación limpia sin azúcar añadida',
+        'Ejecutar 1 acción incómoda pendiente'
+      ],
+      fields: [
+        { id: 'f_progress', label: 'Avance del día (%)', type: 'percent_10', unit: '%' },
+        { id: 'f_focus_timer', label: 'Tiempo de foco / práctica', type: 'timer_minutes', unit: 'min' },
+        { id: 'f_sleep', label: 'Horas de Sueño', type: 'number', unit: 'hrs' },
+        { id: 'f_energy', label: 'Energía Matutina (1-10)', type: 'number', unit: 'pts' },
+        { id: 'f_deep', label: 'Bloques Deep Work sin Móvil', type: 'number', unit: 'bloques' },
+        { id: 'f_cold', label: 'Ducha fría 2 min', type: 'checkbox' },
+        { id: 'f_clean_diet', label: 'Alimentación limpia / Cero azúcar', type: 'checkbox' },
+        { id: 'f_uncomfortable', label: 'Acción incómoda realizada hoy', type: 'text', placeholder: 'Ej: Llamada difícil pendiente...' },
+        { id: 'f_shift', label: 'Cambio mental o físico percibido', type: 'text', placeholder: 'Ej: Menos resistencia al iniciar...' }
+      ],
+      logs: [
+        {
+          id: 'log_i1',
+          date: '2026-11-01',
+          dayNumber: 1,
+          values: {
+            f_progress: 60,
+            f_focus_timer: 45,
+            f_sleep: 6.2,
+            f_energy: 6,
+            f_deep: 1,
+            f_cold: true,
+            f_clean_diet: false,
+            f_uncomfortable: 'Corté redes sociales hasta las 13:00',
+            f_shift: 'Incomodidad inicial fuerte, pero terminé el día con sensación de control.'
+          },
+          completedSubtasks: ['Ducha fría 2 minutos al despertar', 'Ejecutar 1 acción incómoda pendiente'],
+          reflection: 'Línea base: me costó arrancar sin revisar mensajes al despertar.'
+        },
+        {
+          id: 'log_i2',
+          date: '2026-11-05',
+          dayNumber: 5,
+          values: {
+            f_progress: 80,
+            f_focus_timer: 90,
+            f_sleep: 7.0,
+            f_energy: 7,
+            f_deep: 2,
+            f_cold: true,
+            f_clean_diet: true,
+            f_uncomfortable: 'Renegocié tarifa con cliente antiguo sin miedo',
+            f_shift: 'La alimentación limpia redujo el bajón de energía de las 15:00.'
+          },
+          completedSubtasks: ['Ducha fría 2 minutos al despertar', 'Primer bloque Deep Work de 60 min sin móvil', 'Alimentación limpia sin azúcar añadida'],
+          reflection: 'La resistencia mental antes de actuar bajó notablemente.'
+        },
+        {
+          id: 'log_i3',
+          date: '2026-11-10',
+          dayNumber: 10,
+          values: {
+            f_progress: 100,
+            f_focus_timer: 120,
+            f_sleep: 7.5,
+            f_energy: 9,
+            f_deep: 3,
+            f_cold: true,
+            f_clean_diet: true,
+            f_uncomfortable: 'Entrenamiento a las 06:30 AM sin negociar',
+            f_shift: 'Mayor temple emocional bajo presión empresarial.'
+          },
+          completedSubtasks: ['Ducha fría 2 minutos al despertar', 'Primer bloque Deep Work de 60 min sin móvil', 'Alimentación limpia sin azúcar añadida', 'Ejecutar 1 acción incómoda pendiente'],
+          reflection: 'El cuerpo responde mucho mejor cuando no negocio con la alarma.'
+        }
+      ],
+      linkedDecisionIds: []
+    },
+    {
+      id: 'exp_dreyfus_1',
+      title: 'Auditoría del Ser: Coherencia entre Palabra y Acción',
+      inspiration: 'Diego Dreyfus',
+      inspirationColor: 'emerald',
+      pillar: 'espiritual',
+      goalDescription: 'Detectar autoengaños diarios y cerrar cada jornada cumpliendo al 100% los acuerdos conmigo mismo.',
+      hypothesis: 'Cuando cuestiono mis excusas en tiempo real y alineo lo que digo con lo que hago, desaparece la fricción emocional y el estrés crónico.',
+      purpose: 'Detectar autoengaños diarios, validar congruencia personal y transformar la identidad desde la verdad cruda.',
+      durationDays: 14,
+      startDate: '2026-11-04',
+      status: 'active',
+      dailySubtasks: [
+        '15 min de silencio e introspección honesta',
+        'Anotar 1 excusa detectada hoy',
+        'Cumplir palabra en compromiso clave'
+      ],
+      fields: [
+        { id: 'd_progress', label: 'Avance del día (%)', type: 'percent_10', unit: '%' },
+        { id: 'd_coherence', label: 'Nivel de Coherencia (1-10)', type: 'number', unit: 'pts' },
+        { id: 'd_silence', label: 'Silencio Introspectivo', type: 'timer_minutes', unit: 'min' },
+        { id: 'd_kept_word', label: 'Cumplí 100% mi palabra hoy', type: 'checkbox' },
+        { id: 'd_lie', label: 'Cuestioné una creencia limitante', type: 'checkbox' },
+        { id: 'd_belief', label: 'Creencia o excusa detectada', type: 'text', placeholder: '¿Qué historia me estaba contando?' },
+        { id: 'd_truth', label: 'Verdad incómoda aceptada', type: 'text', placeholder: '¿Qué responsabilidad asumí hoy?' }
+      ],
+      logs: [
+        {
+          id: 'log_d1',
+          date: '2026-11-04',
+          dayNumber: 1,
+          values: {
+            d_progress: 60,
+            d_coherence: 6,
+            d_silence: 10,
+            d_kept_word: false,
+            d_lie: true,
+            d_belief: '"No tengo tiempo para ordenar mis finanzas personales"',
+            d_truth: 'No es falta de tiempo, es evitar mirar los números reales de frente.'
+          },
+          completedSubtasks: ['15 min de silencio e introspección honesta', 'Anotar 1 excusa detectada hoy'],
+          reflection: 'Anotar la excusa en frío la vuelve obvia.'
+        },
+        {
+          id: 'log_d2',
+          date: '2026-11-09',
+          dayNumber: 6,
+          values: {
+            d_progress: 100,
+            d_coherence: 9,
+            d_silence: 20,
+            d_kept_word: true,
+            d_lie: true,
+            d_belief: '"Si delego esta tarea no quedará perfecta"',
+            d_truth: 'El perfeccionismo es miedo disfrazado a soltar el control.'
+          },
+          completedSubtasks: ['15 min de silencio e introspección honesta', 'Anotar 1 excusa detectada hoy', 'Cumplir palabra en compromiso clave'],
+          reflection: 'Mucha más paz mental al terminar el día sin deudas conmigo.'
+        }
+      ],
+      linkedDecisionIds: []
     }
   ]
 };
@@ -740,6 +1011,21 @@ export class StorageService {
             ? parsed.personalFinances.creditAccounts
             : initialStoreData.personalFinances.creditAccounts,
         },
+        fitnessLogs: Array.isArray(parsed.fitnessLogs)
+          ? parsed.fitnessLogs
+          : initialStoreData.fitnessLogs,
+        scheduleSlots: Array.isArray(parsed.scheduleSlots) && parsed.scheduleSlots.length > 0
+          ? parsed.scheduleSlots
+          : initialStoreData.scheduleSlots,
+        cleaningSteps: Array.isArray(parsed.cleaningSteps) && parsed.cleaningSteps.length > 0
+          ? parsed.cleaningSteps
+          : initialStoreData.cleaningSteps,
+        notesReminders: Array.isArray(parsed.notesReminders)
+          ? parsed.notesReminders
+          : initialStoreData.notesReminders,
+        personalExperiments: Array.isArray(parsed.personalExperiments) && parsed.personalExperiments.length > 0
+          ? parsed.personalExperiments
+          : initialStoreData.personalExperiments,
       };
       return merged;
     } catch (err) {

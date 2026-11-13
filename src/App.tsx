@@ -14,13 +14,16 @@ import { PhysicalTrainerView } from './components/views/PhysicalTrainerView';
 import { WisdomLibraryView } from './components/views/WisdomLibraryView';
 import { MindsetCoachView } from './components/views/MindsetCoachView';
 import { FinancesView } from './components/views/FinancesView';
-import { SpiritualEmotionalView } from './components/views/SpiritualEmotionalView';
+import { SpiritualView } from './components/views/SpiritualView';
+import { EmotionalView } from './components/views/EmotionalView';
 import { SecondBrainView } from './components/views/SecondBrainView';
 import { ActivationCenterView } from './components/views/ActivationCenterView';
 import { BackupSettingsView } from './components/views/BackupSettingsView';
 import { GeneralTasksView } from './components/views/GeneralTasksView';
 import { StrategyView } from './components/views/StrategyView';
 import { HabitsAndGoalsView } from './components/views/HabitsAndGoalsView';
+import { PersonalExperimentsView } from './components/views/PersonalExperimentsView';
+import { AiAssistantView } from './components/views/AiAssistantView';
 import { SuperMorningModule } from './modules/super-morning/SuperMorningModule';
 import { SuperNightModule } from './modules/super-night/SuperNightModule';
 import { PersonalModule } from './modules/personal/PersonalModule';
@@ -35,6 +38,7 @@ export default function App() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
+  const [financeInitialAction, setFinanceInitialAction] = useState<'add_tx' | null>(null);
 
   // Apple Liquid Glass Theme State (dark vs light)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -106,6 +110,39 @@ export default function App() {
     }));
   };
 
+  const handleOpenQuickPayment = () => {
+    setFinanceInitialAction('add_tx');
+    setActiveView('personal_finances');
+  };
+
+  const handleSendMorningToReminders = (
+    title: string,
+    content: string,
+    category: 'super_manana' | 'frase' = 'super_manana'
+  ) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    updateData((prev) => ({
+      ...prev,
+      notesReminders: [
+        {
+          id: `nr_sm_${Date.now()}`,
+          title,
+          content,
+          category,
+          originModule: 'super_manana',
+          targetView: 'super_morning',
+          reminderDate: todayStr,
+          showInMiDia: true,
+          completed: false,
+          pinned: true,
+          source: 'super_morning',
+          createdAt: new Date().toISOString(),
+        },
+        ...(prev.notesReminders || []),
+      ],
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/60 dark:bg-[#070e0a]/80 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-600 dark:selection:text-blue-300 transition-colors duration-200">
       {/* Top Bar Contract Navigation */}
@@ -159,7 +196,16 @@ export default function App() {
               data={data}
               onNavigate={setActiveView}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+              onOpenQuickPayment={handleOpenQuickPayment}
               onUpdateData={updateData}
+            />
+          )}
+
+          {activeView === 'ai_assistant' && (
+            <AiAssistantView
+              data={data}
+              onUpdateData={updateData}
+              onNavigate={setActiveView}
             />
           )}
 
@@ -187,6 +233,14 @@ export default function App() {
             />
           )}
 
+          {activeView === 'personal_experiments' && (
+            <PersonalExperimentsView
+              data={data}
+              onUpdateData={updateData}
+              onNavigate={setActiveView}
+            />
+          )}
+
           {activeView === 'super_morning' && (
             <SuperMorningModule
               routine={data.superMorning}
@@ -195,19 +249,40 @@ export default function App() {
               }
               onTriggerActivationCoach={() => setActiveView('mindset')}
               onNavigateToSuperNight={() => setActiveView('super_night')}
+              onNavigateToPhysicalTrainer={() => setActiveView('physical_trainer')}
+              onSendToReminders={handleSendMorningToReminders}
             />
           )}
 
-          {activeView === 'super_night' && (
-            <SuperNightModule
-              review={data.superNight}
-              onUpdate={(updated) =>
-                updateData((prev) => ({ ...prev, superNight: updated }))
-              }
-              onTriggerReflectionCoach={() => setActiveView('mindset')}
-              onNavigateToSuperMorning={() => setActiveView('super_morning')}
-            />
-          )}
+          {activeView === 'super_night' && (() => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todayMood =
+              data.moodEntries.find((m) => m.date === todayStr) || data.moodEntries[0];
+            return (
+              <SuperNightModule
+                review={data.superNight}
+                onUpdate={(updated) =>
+                  updateData((prev) => ({ ...prev, superNight: updated }))
+                }
+                onTriggerReflectionCoach={() => setActiveView('mindset')}
+                onNavigateToSuperMorning={() => setActiveView('super_morning')}
+                todayMood={todayMood}
+                onSyncMoodEntry={(entry) =>
+                  updateData((prev) => {
+                    const exists = prev.moodEntries.some((m) => m.id === entry.id || m.date === entry.date);
+                    return {
+                      ...prev,
+                      moodEntries: exists
+                        ? prev.moodEntries.map((m) =>
+                            m.id === entry.id || m.date === entry.date ? entry : m
+                          )
+                        : [entry, ...prev.moodEntries],
+                    };
+                  })
+                }
+              />
+            );
+          })()}
 
           {activeView === 'business' && (
             <BusinessView
@@ -249,13 +324,24 @@ export default function App() {
             <FinancesView
               data={data}
               onUpdateData={updateData}
+              initialAction={financeInitialAction}
+              onClearInitialAction={() => setFinanceInitialAction(null)}
             />
           )}
 
-          {activeView === 'spiritual_emotional' && (
-            <SpiritualEmotionalView
+          {(activeView === 'spiritual' || activeView === 'spiritual_emotional') && (
+            <SpiritualView
               data={data}
               onUpdateData={updateData}
+              onNavigate={setActiveView}
+            />
+          )}
+
+          {activeView === 'emotional' && (
+            <EmotionalView
+              data={data}
+              onUpdateData={updateData}
+              onNavigate={setActiveView}
             />
           )}
 
@@ -264,6 +350,7 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+              onNavigate={setActiveView}
             />
           )}
 

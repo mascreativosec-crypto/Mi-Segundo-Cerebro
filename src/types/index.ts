@@ -39,7 +39,12 @@ export interface SpiritualJournalEntry {
 export interface MoodEntry {
   id: string;
   date: string;
+  timestamp?: string;
   score: number; // 1-5
+  valence_score?: number; // -1.0 a 1.0
+  display_label?: string;
+  emotion_labels?: string[];
+  associations?: string[];
   moodLabel: string;
   primaryEmotion: 'Calma' | 'Gratitud' | 'Entusiasmo' | 'Ansiedad' | 'Fatiga' | 'Frustración' | 'Determinación';
   triggers: string;
@@ -59,8 +64,11 @@ export interface RelationshipNote {
 // 3. Físico (Mi Entrenador)
 export interface ExerciseSet {
   setNumber: number;
+  setName?: string; // e.g. 'Calentamiento', 'Serie efectiva', 'Sprint 1'
   reps: number;
   weightKg: number;
+  distanceKm?: number;
+  durationMinutes?: number;
   completed: boolean;
   notes?: string;
 }
@@ -68,7 +76,9 @@ export interface ExerciseSet {
 export interface WorkoutExercise {
   id: string;
   name: string;
-  muscleGroup: 'Pecho' | 'Espalda' | 'Piernas' | 'Hombros' | 'Brazos' | 'Core' | 'Cardio';
+  environment?: 'gym' | 'outdoor';
+  metricType?: 'weight_reps' | 'distance_time';
+  muscleGroup: 'Pecho' | 'Espalda' | 'Piernas' | 'Hombros' | 'Brazos' | 'Core' | 'Cardio' | 'Exterior';
   targetSets: number;
   targetReps: string;
   restSeconds: number;
@@ -79,6 +89,7 @@ export interface WorkoutExercise {
 export interface WorkoutRoutine {
   id: string;
   title: string;
+  environment?: 'gym' | 'outdoor';
   dayOfWeek: string;
   muscleFocus: string;
   estimatedMinutes: number;
@@ -92,6 +103,17 @@ export interface NutritionHydrationLog {
   energyLevel1to10: number;
   preWorkoutMeal: string;
   date: string;
+}
+
+export interface FitnessActivityLog {
+  id: string;
+  date: string;
+  steps: number;
+  distanceKm: number;
+  caloriesBurned: number;
+  activeMinutes: number;
+  sourceApp: 'Manual' | 'Apple Health' | 'Google Fit' | 'Strava' | 'Garmin';
+  notes?: string;
 }
 
 // 4. Intelectual (Biblioteca de Sabiduría)
@@ -149,9 +171,9 @@ export interface CreditAccount {
   id: string;
   name: string;
   category: 'tarjeta_credito' | 'credito_bancario' | 'prestamo_personal' | 'cuenta_por_pagar';
-  totalLimitOrOriginalAmount: number; // e.g. 1000
-  currentBalanceRemaining: number;   // e.g. 800
-  dueDate: string;                    // fecha límite o día de corte
+  totalLimitOrOriginalAmount: number;
+  currentBalanceRemaining: number;
+  dueDate: string;
   minimumPayment?: number;
   interestRate?: number;
   institution?: string;
@@ -205,6 +227,7 @@ export interface Goal {
   horizon: '5_years' | 'annual' | 'quarterly' | 'monthly';
   pillar?: PillarKey;
   businessId?: string;
+  projectId?: string;
   targetDate: string;
   progressPercent: number;
   status: 'not_started' | 'in_progress' | 'achieved' | 'on_hold';
@@ -264,7 +287,6 @@ export interface ISuperNightReview {
   bestStreak?: number;
   responses?: Record<string, Record<string, any>>;
 
-  // Introspective Sections requested by user
   mainVictory?: string;
   magicMoment?: string;
   tikunReflection?: string;
@@ -276,6 +298,8 @@ export interface ISuperNightReview {
   subconsciousRequestText?: string;
   subconsciousRequestCount?: number;
   dayConclusion?: string;
+  israNightChecks?: Record<string, boolean>;
+  israNightNotes?: string;
 }
 
 // Ecosistema Empresarial
@@ -311,9 +335,17 @@ export interface BusinessProject {
   budget?: number;
 }
 
+export interface TaskSubtask {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface BusinessTask {
   id: string;
   title: string;
+  description?: string;
+  resourceLink?: string;
   scope: 'personal' | 'business';
   businessId?: string;
   projectId?: string;
@@ -325,18 +357,25 @@ export interface BusinessTask {
   dueDate: string;
   estimatedMinutes?: number;
   tags: string[];
+  subtasks?: TaskSubtask[];
+  remindInInbox?: boolean;
   completedAt?: string;
 }
 
 export interface StrategicDecision {
   id: string;
   businessId?: string;
+  scopeTags?: ('personal' | 'business')[];
+  experimentId?: string;
   date: string;
   title: string;
   context: string;
   decision: string;
   expectedOutcome: string;
   quarter: string;
+  keyPoints?: string[];
+  transcript?: string;
+  source?: 'manual' | 'ai_audio' | 'notellm';
 }
 
 // Segundo Cerebro & Captura Rápida
@@ -363,13 +402,24 @@ export interface AppNotification {
   actionUrl?: string;
 }
 
-// Automation Rule
+// Schedule Slots & Automation Rule (Centro de Activación)
+export interface ScheduleSlot {
+  id: string;
+  time: string;
+  label: string;
+  desc: string;
+  view: string;
+  enabled: boolean;
+}
+
 export interface AutomationRule {
   id: string;
   name: string;
   description: string;
-  triggerTime: string; // e.g. "07:00", "12:00", "20:30"
+  triggerTime: string;
   type: 'activation' | 'focus' | 'reflection' | 'capsule' | 'reminder';
+  targetModule?: string;
+  messageTemplate?: string;
   enabled: boolean;
 }
 
@@ -381,8 +431,33 @@ export interface PersonalRitualLog {
   durationMinutes: number;
   completedAt: string;
   notes?: string;
-  rating?: number; // 1-5
+  rating?: number;
   actionTaken?: 'burned' | 'archived' | 'converted_to_task';
+}
+
+export interface CleaningStepItem {
+  id: string;
+  phase: string;
+  title: string;
+  description: string;
+  tips: string[];
+}
+
+export interface RitualField {
+  id: string;
+  type: 'text' | 'textarea' | 'bullets' | 'checkboxes';
+  label: string;
+  placeholder?: string;
+  options?: string[];
+}
+
+export interface RitualPhase {
+  id: string;
+  title: string;
+  subtitle?: string;
+  durationMinutes: number;
+  instructions: string[];
+  fields: RitualField[];
 }
 
 export interface CustomRitual {
@@ -392,4 +467,73 @@ export interface CustomRitual {
   durationMinutes: number;
   icon: string;
   steps: string[];
+  phases?: RitualPhase[];
 }
+
+export type ReminderOriginModule =
+  | 'personal'
+  | 'business'
+  | 'super_manana'
+  | 'super_noche'
+  | 'finanzas'
+  | 'fisico'
+  | 'sabiduria'
+  | 'sistema'
+  | 'general';
+
+export interface NoteReminderItem {
+  id: string;
+  title: string;
+  content: string;
+  category: 'general' | 'super_manana' | 'tarea' | 'frase';
+  originModule?: ReminderOriginModule;
+  targetView?: string;
+  linkedTaskId?: string;
+  reminderTime?: string;
+  reminderDate?: string;
+  showInMiDia: boolean;
+  completed: boolean;
+  pinned?: boolean;
+  source?: 'user' | 'super_morning' | 'system' | 'ai_assistant';
+  createdAt: string;
+}
+
+// Experimentos Personales (Inspirado en Isra García & Diego Dreyfus)
+export type ExperimentFieldType = 'text' | 'number' | 'checkbox' | 'percent_10' | 'timer_minutes';
+
+export interface ExperimentFieldDef {
+  id: string;
+  label: string;
+  type: ExperimentFieldType;
+  unit?: string;
+  placeholder?: string;
+}
+
+export interface ExperimentLogEntry {
+  id: string;
+  date: string;
+  dayNumber: number;
+  values: Record<string, string | number | boolean>;
+  completedSubtasks?: string[];
+  reflection?: string;
+}
+
+export interface PersonalExperiment {
+  id: string;
+  title: string;
+  inspiration: string;
+  inspirationColor?: 'fuchsia' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'cyan';
+  pillar?: PillarKey;
+  goalDescription?: string;
+  hypothesis: string;
+  purpose: string;
+  durationDays: number;
+  startDate: string;
+  status: 'active' | 'completed' | 'paused';
+  fields: ExperimentFieldDef[];
+  dailySubtasks?: string[];
+  logs: ExperimentLogEntry[];
+  linkedDecisionIds?: string[];
+  aiLastFeedback?: string;
+}
+

@@ -106,6 +106,75 @@ class ZenAudioService {
     }
   }
 
+  // --- Nocturnal Ultra-Calm Sounds (Súper Noche) ---
+  // 174 Hz + 261.63 Hz warm deep sleep pad for beginning Súper Noche
+  public playNightCalmBell() {
+    if (!this.soundEnabled) return;
+    this.playTone({
+      freq: 261.63, // C4 soft warm tone
+      duration: 4.2,
+      type: 'sine',
+      harmonics: [174, 392],
+      attack: 0.35,
+      decay: 3.9,
+      gainLevel: 0.16,
+    });
+  }
+
+  // 285 Hz - Gentle soothing night transition (much softer/lower than morning 587Hz)
+  public playNightTransitionChime() {
+    if (!this.soundEnabled) return;
+    this.playTone({
+      freq: 285,
+      duration: 3.6,
+      type: 'sine',
+      harmonics: [427.5],
+      attack: 0.25,
+      decay: 3.3,
+      gainLevel: 0.14,
+    });
+  }
+
+  // Soft 220 Hz tap for night decree counting
+  public playNightSoftTick() {
+    if (!this.soundEnabled) return;
+    this.playTone({
+      freq: 220,
+      duration: 0.65,
+      type: 'sine',
+      harmonics: [330],
+      attack: 0.04,
+      decay: 0.6,
+      gainLevel: 0.1,
+    });
+  }
+
+  // 174 Hz + 256 Hz - Deep sleep serenity closing chord
+  public playNightSleepPad() {
+    if (!this.soundEnabled) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const now = ctx.currentTime;
+      [174, 261.63, 329.63].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        const peak = 0.14 / (idx + 1);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(peak, now + 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 5.8);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 6.0);
+      });
+    } catch {
+      // ignore
+    }
+  }
+
   private playTone(params: {
     freq: number;
     duration: number;

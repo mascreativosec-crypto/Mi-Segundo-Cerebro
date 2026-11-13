@@ -11,6 +11,7 @@ import { PromptFieldRenderer } from '../../components/super-manana/PromptFieldRe
 import { GuidedSessionModal } from '../../components/super-manana/GuidedSessionModal';
 import { HabitBuilderView } from '../../components/super-manana/HabitBuilderView';
 import { ProgressView } from '../../components/super-manana/ProgressView';
+import { StreakRecoveryProtocolCard } from '../../components/shared/StreakRecoveryProtocolCard';
 import {
   Sun,
   Play,
@@ -24,6 +25,9 @@ import {
   Flame,
   ChevronDown,
   ChevronUp,
+  BellPlus,
+  Dumbbell,
+  RefreshCw,
 } from 'lucide-react';
 
 interface SuperMorningModuleProps {
@@ -31,17 +35,22 @@ interface SuperMorningModuleProps {
   onUpdate: (updated: ISuperMorningRoutine) => void;
   onTriggerActivationCoach?: () => void;
   onNavigateToSuperNight?: () => void;
+  onNavigateToPhysicalTrainer?: () => void;
+  onSendToReminders?: (title: string, content: string, category?: 'super_manana' | 'frase') => void;
 }
 
 export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
   routine,
   onUpdate,
-  onTriggerActivationCoach,
-  onNavigateToSuperNight,
+  onNavigateToPhysicalTrainer,
+  onSendToReminders,
 }) => {
   const [activeTab, setActiveTab] = useState<'routine' | 'builder' | 'progress'>('routine');
   const [showGuidedModal, setShowGuidedModal] = useState(false);
   const [expandedHabitId, setExpandedHabitId] = useState<string | null>(null);
+  const [reminderSavedBanner, setReminderSavedBanner] = useState<string | null>(null);
+  const [aiQuotes, setAiQuotes] = useState<Record<string, string>>({});
+  const [loadingAiQuoteId, setLoadingAiQuoteId] = useState<string | null>(null);
 
   // Initialize habits from state or default
   const habits: SuperMorningHabit[] = routine.customHabits && routine.customHabits.length > 0
@@ -50,8 +59,8 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
 
   const mode: RoutineMode = routine.mode || 'balanced';
   const morningLogs: DailyMorningLog[] = (routine.morningLogs as DailyMorningLog[]) || [];
-  const currentStreak = routine.currentStreak || 1;
-  const bestStreak = routine.bestStreak || 1;
+  const currentStreak = routine.currentStreak ?? 1;
+  const bestStreak = routine.bestStreak ?? Math.max(1, currentStreak);
   const totalSessions = morningLogs.length > 0 ? morningLogs.length : 1;
   const savedResponses = routine.responses || {};
 
@@ -61,7 +70,15 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
     : [];
 
   const completedCount = enabledHabits.filter((h) => completedHabitIds.includes(h.id)).length;
-  const isDoneToday = enabledHabits.length > 0 && completedCount === enabledHabits.length;
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const hasCompletedTodayLog = morningLogs.some((l) => l.date === todayDateStr);
+  const hasCompletedYesterdayLog = morningLogs.some((l) => l.date === yesterdayStr);
+  const isDoneToday =
+    (enabledHabits.length > 0 && completedCount === enabledHabits.length) || hasCompletedTodayLog;
+  const hasLostMorningStreak =
+    !isDoneToday &&
+    (currentStreak === 0 || (morningLogs.length > 0 && !hasCompletedYesterdayLog && currentStreak <= 1));
 
   // Selected duration in minutes based on active mode
   const selectedMinutes = useMemo(() => {
@@ -161,6 +178,58 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
     });
 
     setShowGuidedModal(false);
+  };
+
+  const handleFetchHabitAiQuote = async (habit: SuperMorningHabit) => {
+    setLoadingAiQuoteId(habit.id);
+    try {
+      const res = await fetch('/api/gemini/habit-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          habitTitle: habit.title,
+          topic: habit.aiMessageTopic || 'motivacion',
+          description: habit.description,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.quote) {
+          setAiQuotes((prev) => ({ ...prev, [habit.id]: json.quote }));
+        }
+      }
+    } catch {
+      // ignore network error
+    } finally {
+      setLoadingAiQuoteId(null);
+    }
+  };
+
+  const handleRecoverStreak = (frictionReason: string, recoveryNote: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const recoveryLog: DailyMorningLog = {
+      date: todayStr,
+      mode: 'express',
+      totalDurationSeconds: 300,
+      completedHabitIds: enabledHabits.slice(0, 3).map((h) => h.id),
+      responses: {
+        rescate: {
+          friccion: frictionReason,
+          ajuste: recoveryNote || 'Micro-misión de 5 minutos completada para reactivar la inercia.',
+        },
+      },
+      wakeUpTime: routine.wakeUpTime || '06:00',
+      wakeUpMood: routine.wakeUpMood || 4,
+      isRecovery: true,
+    };
+    const nextLogs = [recoveryLog, ...morningLogs.filter((l) => l.date !== todayStr)];
+    const nextStreak = Math.max(2, currentStreak + 1);
+    onUpdate({
+      ...routine,
+      morningLogs: nextLogs,
+      currentStreak: nextStreak,
+      bestStreak: Math.max(bestStreak, nextStreak),
+    });
   };
 
   return (
@@ -279,7 +348,22 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
             {/* 3 Metric Stats Cards */}
             <div className="grid grid-cols-3 gap-3 pt-2">
               <div className="p-3.5 rounded-2xl bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.05]">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Racha Actual</span>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Racha Actual</span>
+                  {hasLostMorningStreak && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById('morning-streak-recovery')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }
+                      className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                    >
+                      Rescatar
+                    </button>
+                  )}
+                </div>
                 <span className="text-lg md:text-xl font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5 mt-0.5 tracking-tight">
                   <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
                   {currentStreak} {currentStreak === 1 ? 'día' : 'días'}
@@ -300,6 +384,46 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
                 </span>
               </div>
             </div>
+
+            {hasLostMorningStreak && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+                  ¿Perdiste tu racha matutina? Aplica la regla &quot;Nunca falles 2 días&quot; con el Protocolo de Rescate (5 min).
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById('morning-streak-recovery')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold shrink-0 cursor-pointer"
+                >
+                  Ir al Protocolo de Rescate ↓
+                </button>
+              </div>
+            )}
+
+            {habits.length < 20 && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 block">
+                    Nueva Rutina Épica Disponible (23 Fases + Isra García)
+                  </span>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Actualiza tu lista actual ({habits.length} fases) a tu secuencia épica completa cuando lo desees.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onUpdate({ ...routine, customHabits: SUPER_MANANA_HABITS })}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Cargar 23 Fases Épicas</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -423,6 +547,43 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
               </button>
             </div>
 
+            {/* Intención o Frase para Recordar Hoy - INSIDE Actividades de la Mañana */}
+            <div className="p-4 rounded-2xl bg-amber-500/[0.06] dark:bg-amber-500/[0.08] border border-amber-500/20 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                  Intención o Frase para Recordar Hoy (opcional enviar a Recordatorios)
+                </label>
+                {onSendToReminders && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!routine.intention?.trim()) return;
+                      onSendToReminders('Intención de Súper Mañana', routine.intention.trim(), 'super_manana');
+                      setReminderSavedBanner('Intención enviada a Notas & Recordatorios (visible en Mi Día)');
+                      setTimeout(() => setReminderSavedBanner(null), 3500);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer shrink-0 whitespace-nowrap"
+                  >
+                    <BellPlus className="w-3.5 h-3.5" />
+                    <span>Enviar a Bandeja de Recordatorios</span>
+                  </button>
+                )}
+              </div>
+              <textarea
+                rows={3}
+                maxLength={7000}
+                value={routine.intention || ''}
+                onChange={(e) => onUpdate({ ...routine, intention: e.target.value })}
+                placeholder="Escribe aquí tu intención, frase o decreto del día. Si deseas que el sistema te la recuerde, presiona el botón de arriba..."
+                className="w-full bg-white/85 dark:bg-black/40 border border-amber-500/25 rounded-xl p-3 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 resize-y"
+              />
+              {reminderSavedBanner && (
+                <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  {reminderSavedBanner}
+                </p>
+              )}
+            </div>
+
             <div className="space-y-2.5">
               {enabledHabits.map((habit, index) => {
                 const isDone = completedHabitIds.includes(habit.id);
@@ -487,7 +648,13 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
                         </span>
 
                         <button
-                          onClick={() => setExpandedHabitId(isExpanded ? null : habit.id)}
+                          onClick={() => {
+                            const nextOpen = isExpanded ? null : habit.id;
+                            setExpandedHabitId(nextOpen);
+                            if (nextOpen && habit.enableAiDailyMessage && !aiQuotes[habit.id]) {
+                              handleFetchHabitAiQuote(habit);
+                            }
+                          }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                           title="Ver pautas y campos"
                         >
@@ -499,8 +666,87 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
                     {isExpanded && (
                       <div className="px-5 pb-5 pt-2 border-t border-slate-200/60 dark:border-white/[0.06] space-y-3 bg-slate-50/70 dark:bg-black/30">
                         {habit.stoicQuote && (
-                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs italic text-amber-900 dark:text-amber-200/90 font-serif">
-                            "{habit.stoicQuote}"
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-xs italic text-amber-900 dark:text-amber-200/90 font-serif">
+                              "{habit.stoicQuote}"
+                            </span>
+                            {onSendToReminders && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSendToReminders(
+                                    `Frase · ${habit.title}`,
+                                    habit.stoicQuote!,
+                                    'frase'
+                                  );
+                                  setReminderSavedBanner(`Frase de "${habit.title}" enviada a Mi Día`);
+                                  setTimeout(() => setReminderSavedBanner(null), 3500);
+                                }}
+                                className="text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
+                              >
+                                <BellPlus className="w-3 h-3" />
+                                <span>Enviar a Recordatorios</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* AI Daily Message / Meditation Quote Box */}
+                        {habit.enableAiDailyMessage && (
+                          <div className="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 uppercase flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Mensaje IA Aleatorio del Día</span>
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleFetchHabitAiQuote(habit)}
+                                  disabled={loadingAiQuoteId === habit.id}
+                                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-300 hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                  <RefreshCw className={`w-3 h-3 ${loadingAiQuoteId === habit.id ? 'animate-spin' : ''}`} />
+                                  <span>{loadingAiQuoteId === habit.id ? 'Generando...' : 'Otra frase IA'}</span>
+                                </button>
+                                {onSendToReminders && aiQuotes[habit.id] && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onSendToReminders(`Mensaje IA · ${habit.title}`, aiQuotes[habit.id], 'frase');
+                                      setReminderSavedBanner('Mensaje IA enviado a Bandeja de Recordatorios');
+                                      setTimeout(() => setReminderSavedBanner(null), 3500);
+                                    }}
+                                    className="text-[11px] font-bold text-amber-700 dark:text-amber-300 hover:underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <BellPlus className="w-3 h-3" />
+                                    <span>Recordar</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs italic text-slate-800 dark:text-slate-100">
+                              {aiQuotes[habit.id]
+                                ? `"${aiQuotes[habit.id]}"`
+                                : 'Generando tu mensaje diario personalizado...'}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Physical Trainer Quick Link */}
+                        {habit.linkToFitness && onNavigateToPhysicalTrainer && (
+                          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs text-emerald-800 dark:text-emerald-200 font-medium">
+                              Conecta este bloque físico con tus series, pesos y rutina en Mi Entrenador Físico.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={onNavigateToPhysicalTrainer}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Dumbbell className="w-3.5 h-3.5" />
+                              <span>Ir a Entrenador Físico</span>
+                            </button>
                           </div>
                         )}
 
@@ -508,7 +754,32 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
 
                         {habit.fields && habit.fields.length > 0 && (
                           <div className="p-4 rounded-xl bg-white/70 dark:bg-black/50 border border-slate-200/80 dark:border-white/[0.06] space-y-3">
-                            <span className="text-xs font-semibold text-slate-900 dark:text-white block">Tus Registros de la Fase</span>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-slate-900 dark:text-white block">Tus Registros de la Fase</span>
+                              {onSendToReminders &&
+                                savedResponses[habit.id] &&
+                                Object.values(savedResponses[habit.id]).some((v) =>
+                                  typeof v === 'string' ? v.trim().length > 0 : Array.isArray(v) && v.length > 0
+                                ) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const text = Object.values(savedResponses[habit.id])
+                                        .flat()
+                                        .filter((v) => typeof v === 'string' && v.trim())
+                                        .join(' · ');
+                                      if (!text) return;
+                                      onSendToReminders(habit.title, text, 'super_manana');
+                                      setReminderSavedBanner(`Nota de "${habit.title}" enviada a Recordatorios`);
+                                      setTimeout(() => setReminderSavedBanner(null), 3500);
+                                    }}
+                                    className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <BellPlus className="w-3 h-3" />
+                                    <span>Recordar en Mi Día</span>
+                                  </button>
+                                )}
+                            </div>
                             {habit.fields.map((f) => (
                               <PromptFieldRenderer
                                 key={f.id}
@@ -526,6 +797,17 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
               })}
             </div>
           </div>
+
+          {/* Protocolo de Rescate al final de todos los bloques de Súper Mañana */}
+          <StreakRecoveryProtocolCard
+            id="morning-streak-recovery"
+            theme="amber"
+            moduleLabel="Súper Mañana"
+            hasLostStreak={hasLostMorningStreak}
+            isDoneToday={isDoneToday}
+            currentStreak={currentStreak}
+            onRecoverStreak={handleRecoverStreak}
+          />
         </div>
       )}
 
@@ -544,6 +826,7 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
           logs={morningLogs}
           currentStreak={currentStreak}
           bestStreak={bestStreak}
+          onRecoverStreak={handleRecoverStreak}
         />
       )}
 
@@ -554,6 +837,8 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
           mode={mode}
           onClose={() => setShowGuidedModal(false)}
           onFinishSession={handleFinishGuidedSession}
+          aiQuotes={aiQuotes}
+          onOpenPhysicalTrainer={onNavigateToPhysicalTrainer}
         />
       )}
     </div>

@@ -24,6 +24,7 @@ import {
   Heart,
   Smile,
   Check,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface HabitsAndGoalsViewProps {
@@ -66,6 +67,12 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
   const [newGoalTargetDate, setNewGoalTargetDate] = useState('2026-12-31');
   const [newMilestoneText, setNewMilestoneText] = useState('');
   const [goalMilestones, setGoalMilestones] = useState<{ id: string; text: string; done: boolean }[]>([]);
+
+  // Habit Streak Recovery Protocol State
+  const [rescueHabitId, setRescueHabitId] = useState<string | null>(null);
+  const [rescueFriction, setRescueFriction] = useState<string>('Falta de tiempo o energía hoy');
+  const [rescueApplyBridge, setRescueApplyBridge] = useState<boolean>(true);
+  const [rescueSuccessBanner, setRescueSuccessBanner] = useState<string | null>(null);
 
   // Calculation of the past 28 days (4 full weeks ending with today)
   const past28Days = useMemo(() => {
@@ -131,6 +138,64 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
   // Toggle habit completion today
   const handleToggleHabitCompletionToday = (habitId: string) => {
     handleToggleHabitDate(habitId, todayStr);
+  };
+
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  const brokenOrAtRiskHabits = useMemo(() => {
+    return data.habits.filter((h) => {
+      const doneToday = h.completedDates.includes(todayStr);
+      const doneYesterday = h.completedDates.includes(yesterdayStr);
+      if (doneToday) return false;
+      return h.currentStreak === 0 || !doneYesterday;
+    });
+  }, [data.habits, todayStr, yesterdayStr]);
+
+  const handleExecuteHabitRescue = (habit: Habit) => {
+    onUpdateData((prev) => ({
+      ...prev,
+      habits: prev.habits.map((h) => {
+        if (h.id !== habit.id) return h;
+        const dates = new Set(h.completedDates);
+        dates.add(todayStr);
+        if (rescueApplyBridge) {
+          dates.add(yesterdayStr);
+        }
+        const nextDates = Array.from(dates);
+        let streak = 0;
+        const cursor = new Date();
+        while (dates.has(cursor.toISOString().split('T')[0])) {
+          streak++;
+          cursor.setDate(cursor.getDate() - 1);
+        }
+        return {
+          ...h,
+          completedDates: nextDates,
+          currentStreak: streak,
+          bestStreak: Math.max(h.bestStreak, streak),
+        };
+      }),
+    }));
+
+    try {
+      confetti({
+        particleCount: 80,
+        spread: 65,
+        origin: { y: 0.65 },
+      });
+    } catch {
+      // ignore
+    }
+
+    setRescueSuccessBanner(
+      `Racha rescatada en "${habit.title}" (${rescueApplyBridge ? 'con Escudo de 1 día' : 'Regla Nunca Falles 2 Días'}) · Causa: ${rescueFriction}`
+    );
+    setRescueHabitId(null);
+    setTimeout(() => setRescueSuccessBanner(null), 5000);
   };
 
   // Launch Zen Timer
@@ -476,6 +541,115 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
             </div>
           </div>
 
+          {rescueSuccessBanner && (
+            <div className="p-4 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{rescueSuccessBanner}</span>
+            </div>
+          )}
+
+          {/* Protocolo de Rescate de Racha de Hábitos */}
+          {brokenOrAtRiskHabits.length > 0 && (
+            <div className="p-5 rounded-3xl backdrop-blur-2xl bg-amber-500/[0.08] dark:bg-amber-950/20 border border-amber-500/30 shadow-md space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/35 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Protocolo de Rescate de Racha · Regla &quot;Nunca Falles 2 Días Seguidos&quot;
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                      Tienes {brokenOrAtRiskHabits.length} hábito(s) sin racha activa hoy. No reinicies con culpa: aplica una versión mínima de 2 min para reactivar tu inercia sin romper tu identidad.
+                    </p>
+                  </div>
+                </div>
+                {!rescueHabitId && (
+                  <button
+                    type="button"
+                    onClick={() => setRescueHabitId(brokenOrAtRiskHabits[0].id)}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold shrink-0 cursor-pointer shadow-sm"
+                  >
+                    Activar Rescate Ahora
+                  </button>
+                )}
+              </div>
+
+              {rescueHabitId && (() => {
+                const targetHabit =
+                  data.habits.find((h) => h.id === rescueHabitId) || brokenOrAtRiskHabits[0];
+                if (!targetHabit) return null;
+                return (
+                  <div className="p-4 rounded-2xl bg-white/85 dark:bg-black/45 border border-amber-500/30 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          1. Hábito a rescatar
+                        </label>
+                        <select
+                          value={targetHabit.id}
+                          onChange={(e) => setRescueHabitId(e.target.value)}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                        >
+                          {brokenOrAtRiskHabits.map((bh) => (
+                            <option key={bh.id} value={bh.id}>
+                              {bh.title} (racha actual: {bh.currentStreak}d · récord: {bh.bestStreak}d)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                          2. ¿Qué fricción causó la pausa?
+                        </label>
+                        <select
+                          value={rescueFriction}
+                          onChange={(e) => setRescueFriction(e.target.value)}
+                          className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white"
+                        >
+                          <option value="Falta de tiempo o energía hoy">Falta de tiempo o energía hoy</option>
+                          <option value="Hábito demasiado grande / fricción de inicio">Hábito demasiado grande / fricción de inicio</option>
+                          <option value="Imprevisto laboral, viaje o salud">Imprevisto laboral, viaje o salud</option>
+                          <option value="Olvido o falta de disparador visual">Olvido o falta de disparador visual</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rescueApplyBridge}
+                        onChange={(e) => setRescueApplyBridge(e.target.checked)}
+                        className="w-4 h-4 accent-amber-500 rounded"
+                      />
+                      <span>
+                        Usar <strong>Escudo de Rescate (1 día)</strong> si fue imprevisto justificado y continuar la racha tras cumplir el microhábito de 2 minutos hoy.
+                      </span>
+                    </label>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRescueHabitId(null)}
+                        className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                      >
+                        Cerrar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteHabitRescue(targetHabit)}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black text-xs font-extrabold cursor-pointer shadow-md"
+                      >
+                        Completar Micro-Versión (2 min) y Rescatar Racha
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {/* Habit Cards Grid with Matriz de Consistencia (Últimos 28 Días) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredHabits.map((habit) => {
@@ -616,15 +790,27 @@ export const HabitsAndGoalsView: React.FC<HabitsAndGoalsViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Timer CTA */}
-                    <button
-                      type="button"
-                      onClick={() => handleStartTimer(habit)}
-                      className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-blue-500/15 via-indigo-500/15 to-emerald-500/15 hover:from-blue-500/25 hover:to-emerald-500/25 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Iniciar Temporizador Zen ({durationMins} min)</span>
-                    </button>
+                    {/* Timer CTA + Rescate Racha if broken */}
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleStartTimer(habit)}
+                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-blue-500/15 via-indigo-500/15 to-emerald-500/15 hover:from-blue-500/25 hover:to-emerald-500/25 border border-blue-500/30 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Iniciar Temporizador Zen ({durationMins} min)</span>
+                      </button>
+                      {!isCompletedToday && habit.currentStreak === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setRescueHabitId(habit.id)}
+                          className="w-full py-1.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-800 dark:text-amber-300 font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>Rescatar Racha (Micro-Versión 2 min)</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

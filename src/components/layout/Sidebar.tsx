@@ -17,6 +17,8 @@ import {
   Heart,
   Layers,
   Flame,
+  Bot,
+  FlaskConical,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -55,6 +57,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           dotColor: 'bg-emerald-500 dark:bg-emerald-400',
         },
         {
+          id: 'second_brain',
+          label: 'Segundo Cerebro & Recordatorios',
+          icon: Brain,
+          colorClass: 'text-violet-500 dark:text-violet-400',
+          activeClass: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 shadow-sm shadow-violet-500/10',
+          dotColor: 'bg-violet-500 dark:bg-violet-400',
+        },
+        {
+          id: 'ai_assistant',
+          label: 'Asistente IA del Sistema',
+          icon: Bot,
+          colorClass: 'text-cyan-500 dark:text-cyan-400',
+          activeClass: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30 shadow-sm shadow-cyan-500/10',
+          dotColor: 'bg-cyan-500 dark:bg-cyan-400',
+        },
+        {
           id: 'personal_dashboard',
           label: '5 Pilares de Crecimiento',
           icon: TrendingUp,
@@ -84,6 +102,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           dotColor: 'bg-rose-500 dark:bg-rose-400',
         },
         {
+          id: 'personal_experiments',
+          label: 'Experimentos Personales',
+          icon: FlaskConical,
+          colorClass: 'text-fuchsia-500 dark:text-fuchsia-400',
+          activeClass: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30 shadow-sm shadow-fuchsia-500/10',
+          dotColor: 'bg-fuchsia-500 dark:bg-fuchsia-400',
+        },
+        {
           id: 'habits_goals',
           label: 'Hábitos & Metas',
           icon: Flame,
@@ -111,9 +137,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           id: 'tasks_general',
           label: 'Gestión de Tareas',
           icon: CheckSquare,
-          colorClass: 'text-teal-500 dark:text-teal-400',
-          activeClass: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30 shadow-sm',
-          dotColor: 'bg-teal-500 dark:bg-teal-400',
+          colorClass: 'text-sky-500 dark:text-sky-400',
+          activeClass: 'bg-gradient-to-r from-sky-500/20 via-blue-500/15 to-indigo-500/20 text-sky-700 dark:text-sky-300 border-sky-500/35 shadow-sm shadow-sky-500/10',
+          dotColor: 'bg-gradient-to-r from-sky-500 to-indigo-500',
         },
         {
           id: 'personal_finances',
@@ -148,8 +174,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           dotColor: 'bg-cyan-500 dark:bg-cyan-400',
         },
         {
-          id: 'spiritual_emotional',
-          label: 'Espiritual & Emocional',
+          id: 'spiritual',
+          label: 'Espiritual',
+          icon: Compass,
+          colorClass: 'text-purple-500 dark:text-purple-400',
+          activeClass: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 shadow-sm',
+          dotColor: 'bg-purple-500 dark:bg-purple-400',
+        },
+        {
+          id: 'emotional',
+          label: 'Emocional',
           icon: HeartHandshake,
           colorClass: 'text-pink-500 dark:text-pink-400',
           activeClass: 'bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30 shadow-sm',
@@ -179,16 +213,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      title: 'Segundo Cerebro',
+      title: 'Sistema & Respaldo',
       items: [
-        {
-          id: 'second_brain',
-          label: 'Captura & Conocimiento',
-          icon: Brain,
-          colorClass: 'text-violet-500 dark:text-violet-400',
-          activeClass: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 shadow-sm',
-          dotColor: 'bg-violet-500 dark:bg-violet-400',
-        },
         {
           id: 'backup_settings',
           label: 'Respaldos & Seguridad',

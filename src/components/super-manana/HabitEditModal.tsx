@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SuperMorningHabit, HabitCategory, PromptField, PromptFieldType } from '../../types/super-morning';
 import {
   X,
@@ -72,10 +72,7 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
   onSave,
   theme = 'amber',
 }) => {
-  if (!isOpen) return null;
-
   const isPurple = theme === 'purple';
-
   const isEditing = Boolean(habit);
 
   const [title, setTitle] = useState(habit?.title || '');
@@ -84,6 +81,13 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
   const [description, setDescription] = useState(habit?.description || '');
   const [practicalTip, setPracticalTip] = useState(habit?.instructions?.[0] || '');
   const [selectedIcon, setSelectedIcon] = useState(habit?.icon || 'Sun');
+  const [enableAiDailyMessage, setEnableAiDailyMessage] = useState<boolean>(
+    Boolean(habit?.enableAiDailyMessage)
+  );
+  const [aiMessageTopic, setAiMessageTopic] = useState<'motivacion' | 'meditacion' | 'isra' | 'general'>(
+    (habit?.aiMessageTopic as 'motivacion' | 'meditacion' | 'isra' | 'general') || 'motivacion'
+  );
+  const [linkToFitness, setLinkToFitness] = useState<boolean>(Boolean(habit?.linkToFitness));
 
   // Fields management
   const [enableFields, setEnableFields] = useState<boolean>(
@@ -91,23 +95,72 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
   );
   const [fields, setFields] = useState<PromptField[]>(habit?.fields ? [...habit.fields] : []);
 
-  // New field input
+  // New field contextual inputs
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [newFieldType, setNewFieldType] = useState<PromptFieldType>('text');
+  const [newFieldPlaceholder, setNewFieldPlaceholder] = useState('');
+  const [newFieldOptionsText, setNewFieldOptionsText] = useState('Opción 1, Opción 2, Opción 3');
+  const [newFieldLeftLabel, setNewFieldLeftLabel] = useState('Bajo mi control');
+  const [newFieldRightLabel, setNewFieldRightLabel] = useState('Fuera de mi control');
 
-  const handleAddField = (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    if (!isOpen) return;
+    setTitle(habit?.title || '');
+    setDefaultMinutes(habit?.defaultMinutes || 2);
+    setCategory(habit?.category || 'mind');
+    setDescription(habit?.description || '');
+    setPracticalTip(habit?.instructions?.[0] || '');
+    setSelectedIcon(habit?.icon || 'Sun');
+    setEnableAiDailyMessage(Boolean(habit?.enableAiDailyMessage));
+    setAiMessageTopic(
+      (habit?.aiMessageTopic as 'motivacion' | 'meditacion' | 'isra' | 'general') || 'motivacion'
+    );
+    setLinkToFitness(Boolean(habit?.linkToFitness));
+    setEnableFields(Boolean(habit?.fields && habit.fields.length > 0));
+    setFields(habit?.fields ? JSON.parse(JSON.stringify(habit.fields)) : []);
+    setNewFieldLabel('');
+    setNewFieldType('text');
+    setNewFieldPlaceholder('');
+    setNewFieldOptionsText('Opción 1, Opción 2, Opción 3');
+    setNewFieldLeftLabel('Bajo mi control');
+    setNewFieldRightLabel('Fuera de mi control');
+  }, [habit, isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleAddField = () => {
     if (!newFieldLabel.trim()) return;
 
+    const parsedOptions = newFieldOptionsText
+      .split(/\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const newField: PromptField = {
-      id: `fld_${Date.now()}`,
+      id: `fld_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
       type: newFieldType,
       label: newFieldLabel.trim(),
-      placeholder: newFieldType === 'text' ? 'Escribe aquí tu respuesta...' : undefined,
+      placeholder:
+        newFieldPlaceholder.trim() ||
+        (newFieldType === 'bullets'
+          ? 'Escribe un punto por línea...'
+          : newFieldType === 'textarea'
+          ? 'Escribe tu reflexión extendida...'
+          : newFieldType === 'text'
+          ? 'Escribe aquí tu respuesta...'
+          : undefined),
+      options: newFieldType === 'checkboxes' ? (parsedOptions.length > 0 ? parsedOptions : ['Paso 1', 'Paso 2']) : undefined,
+      leftLabel: newFieldType === 'pair' ? newFieldLeftLabel.trim() || 'Bajo mi control' : undefined,
+      rightLabel: newFieldType === 'pair' ? newFieldRightLabel.trim() || 'Fuera de mi control' : undefined,
     };
 
     setFields([...fields, newField]);
     setNewFieldLabel('');
+    setNewFieldPlaceholder('');
+  };
+
+  const handleUpdateExistingField = (id: string, patch: Partial<PromptField>) => {
+    setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   };
 
   const handleDeleteField = (id: string) => {
@@ -134,6 +187,9 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
       instructions: practicalTip.trim() ? [practicalTip.trim()] : (habit?.instructions || []),
       stoicQuote: habit?.stoicQuote,
       fields: enableFields ? fields : [],
+      enableAiDailyMessage,
+      aiMessageTopic: enableAiDailyMessage ? aiMessageTopic : undefined,
+      linkToFitness,
     };
 
     onSave(saved);
@@ -142,7 +198,7 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className={`relative w-full max-w-2xl rounded-3xl backdrop-blur-2xl bg-white/95 dark:bg-[#0c131a]/95 border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${
+      <div className={`relative w-full max-w-3xl rounded-3xl backdrop-blur-2xl bg-white/95 dark:bg-[#0c131a]/95 border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] ${
         isPurple ? 'border-slate-200/80 dark:border-purple-500/30' : 'border-slate-200/80 dark:border-amber-500/30'
       }`}>
         {/* Header */}
@@ -150,7 +206,7 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
           isPurple ? 'border-slate-200/80 dark:border-purple-500/20' : 'border-slate-200/80 dark:border-amber-500/20'
         }`}>
           <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
-            {isEditing ? 'Editar Hábito y Campos' : 'Crear Nuevo Hábito y Campos'}
+            {isEditing ? 'Editar Hábito y Campos Interactivos' : 'Crear Nuevo Hábito y Campos Interactivos'}
           </h2>
           <button
             onClick={onClose}
@@ -217,37 +273,92 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
             </div>
           </div>
 
-          {/* Breve descripción */}
-          <div>
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
-              Breve descripción
-            </label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Introspección y desconexión intencional..."
-              className={`w-full bg-slate-100/80 dark:bg-slate-950/80 border rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none ${
-                isPurple ? 'border-slate-300 dark:border-purple-500/20 focus:border-purple-500' : 'border-slate-300 dark:border-amber-500/20 focus:border-amber-500'
-              }`}
-            />
+          {/* Breve descripción y Consejo */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                Breve descripción
+              </label>
+              <textarea
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Introspección, meditación o propósito de este hábito..."
+                className={`w-full bg-slate-100/80 dark:bg-slate-950/80 border rounded-xl p-3 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none resize-y ${
+                  isPurple ? 'border-slate-300 dark:border-purple-500/20 focus:border-purple-500' : 'border-slate-300 dark:border-amber-500/20 focus:border-amber-500'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                Consejo práctico para la sesión guiada
+              </label>
+              <textarea
+                rows={3}
+                value={practicalTip}
+                onChange={(e) => setPracticalTip(e.target.value)}
+                placeholder="Consejo para ejecutar esta fase con serenidad y presencia..."
+                className={`w-full bg-slate-100/80 dark:bg-slate-950/80 border rounded-xl p-3 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none resize-y ${
+                  isPurple ? 'border-slate-300 dark:border-purple-500/20 focus:border-purple-500' : 'border-slate-300 dark:border-amber-500/20 focus:border-amber-500'
+                }`}
+              />
+            </div>
           </div>
 
-          {/* Consejo práctico */}
-          <div>
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
-              Consejo práctico para la sesión guiada
-            </label>
-            <textarea
-              rows={2}
-              value={practicalTip}
-              onChange={(e) => setPracticalTip(e.target.value)}
-              placeholder="Consejo para ejecutar esta fase con serenidad y presencia..."
-              className={`w-full bg-slate-100/80 dark:bg-slate-950/80 border rounded-xl p-3 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none resize-none ${
-                isPurple ? 'border-slate-300 dark:border-purple-500/20 focus:border-purple-500' : 'border-slate-300 dark:border-amber-500/20 focus:border-amber-500'
-              }`}
-            />
-          </div>
+          {/* Smart Automation Options (AI Daily Message & Fitness Integration) */}
+          {!isPurple && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 rounded-2xl bg-amber-500/[0.06] border border-amber-500/20">
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableAiDailyMessage}
+                    onChange={(e) => setEnableAiDailyMessage(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      Frase / Mensaje IA aleatorio cada día
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      La IA generará un mensaje diario distinto según la descripción o enfoque del hábito.
+                    </span>
+                  </div>
+                </label>
+
+                {enableAiDailyMessage && (
+                  <select
+                    value={aiMessageTopic}
+                    onChange={(e) => setAiMessageTopic(e.target.value as any)}
+                    className="w-full bg-white dark:bg-slate-900 border border-amber-500/30 rounded-xl px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200"
+                  >
+                    <option value="motivacion">Motivación y Disciplina Diaria</option>
+                    <option value="meditacion">Meditación, Silencio y Calma</option>
+                    <option value="isra">Incomodidad Voluntaria (Isra García)</option>
+                    <option value="general">Sabiduría y Enfoque General</option>
+                  </select>
+                )}
+              </div>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={linkToFitness}
+                  onChange={(e) => setLinkToFitness(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-amber-500 focus:ring-amber-400 w-4 h-4"
+                />
+                <div>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                    Enlazar a Entrenador Físico
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Muestra acceso directo para registrar series o ir al módulo Mi Entrenador Físico.
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Icono Representativo Grid */}
           <div>
@@ -283,14 +394,16 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
             </div>
           </div>
 
-          {/* Sección Campos para llenar */}
-          <div className={`pt-3 border-t space-y-3 ${
+          {/* Sección Campos para llenar (AMPLIADA Y CONTEXTUAL) */}
+          <div className={`pt-4 border-t space-y-4 ${
             isPurple ? 'border-slate-200 dark:border-purple-500/20' : 'border-slate-200 dark:border-amber-500/20'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Tag className={`w-4 h-4 ${isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-500'}`} />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">Campos para llenar en esta actividad</span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
+                  Campos para llenar en esta actividad (Casillas, Listas o Textos)
+                </span>
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
                 <input
@@ -306,87 +419,203 @@ export const HabitEditModal: React.FC<HabitEditModalProps> = ({
             </div>
 
             {enableFields && (
-              <div className={`p-4 rounded-2xl bg-slate-100/70 dark:bg-slate-950/80 border space-y-4 ${
+              <div className={`p-5 rounded-2xl bg-slate-100/70 dark:bg-slate-950/80 border space-y-5 ${
                 isPurple ? 'border-slate-200 dark:border-purple-500/25' : 'border-slate-200 dark:border-amber-500/25'
               }`}>
-                {/* Campos configurados list */}
+                {/* Campos configurados list (editable inline!) */}
                 <div>
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block mb-2">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-bold block mb-2.5">
                     Campos configurados ({fields.length}):
                   </span>
                   {fields.length === 0 ? (
                     <span className="text-xs text-slate-400 dark:text-slate-500 italic block">
-                      No hay campos agregados todavía.
+                      No hay campos agregados todavía. Crea uno abajo eligiendo el tipo de campo.
                     </span>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {fields.map((f, idx) => (
                         <div
                           key={f.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs shadow-xs"
+                          className="p-3.5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 text-xs space-y-2.5 shadow-xs"
                         >
-                          <div className="flex items-center gap-2 flex-1">
-                            <span className={`text-xs font-bold ${
-                              isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'
-                            }`}>
-                              #{idx + 1}
-                            </span>
-                            <span className="text-slate-800 dark:text-slate-200 font-medium">{f.label}</span>
-                            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                              {f.type}
-                            </span>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className={`text-xs font-bold ${
+                                isPurple ? 'text-purple-600 dark:text-purple-400' : 'text-amber-600 dark:text-amber-400'
+                              }`}>
+                                #{idx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                value={f.label}
+                                onChange={(e) => handleUpdateExistingField(f.id, { label: e.target.value })}
+                                className="flex-1 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-900 dark:text-white"
+                              />
+                              <span className="text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700">
+                                {f.type}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteField(f.id)}
+                              className="text-slate-400 hover:text-red-500 p-1.5 cursor-pointer"
+                              title="Eliminar campo"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteField(f.id)}
-                            className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
-                            title="Eliminar campo"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+
+                          {f.type === 'checkboxes' && (
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                                Casillas / Opciones (separadas por coma o salto de línea):
+                              </label>
+                              <textarea
+                                rows={2}
+                                value={(f.options || []).join(', ')}
+                                onChange={(e) =>
+                                  handleUpdateExistingField(f.id, {
+                                    options: e.target.value
+                                      .split(/\n|,/)
+                                      .map((s) => s.trim())
+                                      .filter(Boolean),
+                                  })
+                                }
+                                placeholder="Ej: Flexiones x20, Sentadillas x30, Estiramiento 3 min"
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300"
+                              />
+                            </div>
+                          )}
+
+                          {(f.type === 'text' || f.type === 'textarea' || f.type === 'bullets') && (
+                            <div>
+                              <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                                Guía o placeholder de ayuda:
+                              </label>
+                              <input
+                                type="text"
+                                value={f.placeholder || ''}
+                                onChange={(e) => handleUpdateExistingField(f.id, { placeholder: e.target.value })}
+                                placeholder="Texto de ejemplo dentro del recuadro..."
+                                className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300"
+                              />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Añadir nueva pregunta o campo */}
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold block">
-                    Añadir nueva pregunta o campo de registro:
+                {/* Añadir nueva pregunta o campo - Spacious Contextual Builder */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                  <span className="text-[11px] text-slate-700 dark:text-slate-300 uppercase font-bold block">
+                    Añadir nueva casilla, lista o campo de texto:
                   </span>
-                  <div className="flex flex-col sm:flex-row items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ej: ¿Cuál es tu reflexión principal?"
-                      value={newFieldLabel}
-                      onChange={(e) => setNewFieldLabel(e.target.value)}
-                      className={`flex-1 w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none ${
-                        isPurple ? 'focus:border-purple-500' : 'focus:border-amber-500'
-                      }`}
-                    />
-                    <select
-                      value={newFieldType}
-                      onChange={(e) => setNewFieldType(e.target.value as PromptFieldType)}
-                      className={`bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none w-full sm:w-auto ${
-                        isPurple ? 'focus:border-purple-500' : 'focus:border-amber-500'
-                      }`}
-                    >
-                      <option value="text">Texto corto</option>
-                      <option value="textarea">Texto largo / Reflexión</option>
-                      <option value="bullets">Lista de viñetas</option>
-                      <option value="pair">Par Estoico (Control / No control)</option>
-                      <option value="checkboxes">Casillas de verificación</option>
-                    </select>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                        Título o pregunta del campo
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Serie de ejercicios o Reflexión de la fase"
+                        value={newFieldLabel}
+                        onChange={(e) => setNewFieldLabel(e.target.value)}
+                        className={`w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none ${
+                          isPurple ? 'focus:border-purple-500' : 'focus:border-amber-500'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-500 block mb-1">
+                        Tipo de campo
+                      </label>
+                      <select
+                        value={newFieldType}
+                        onChange={(e) => setNewFieldType(e.target.value as PromptFieldType)}
+                        className={`w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none ${
+                          isPurple ? 'focus:border-purple-500' : 'focus:border-amber-500'
+                        }`}
+                      >
+                        <option value="text">Texto corto</option>
+                        <option value="textarea">Texto largo (hasta 1000 palabras)</option>
+                        <option value="bullets">Lista de viñetas</option>
+                        <option value="checkboxes">Casillas de verificación (Checklist)</option>
+                        <option value="pair">Par Estoico (Control / No control)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Contextual options based on chosen newFieldType */}
+                  {newFieldType === 'checkboxes' && (
+                    <div className="p-3.5 rounded-xl bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                        Casillas a incluir (escríbelas separadas por coma o una por línea):
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={newFieldOptionsText}
+                        onChange={(e) => setNewFieldOptionsText(e.target.value)}
+                        placeholder="Ej: Serie 1 · 15 Flexiones, Serie 2 · 20 Sentadillas, Plancha 60 seg"
+                        className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {(newFieldType === 'text' || newFieldType === 'textarea' || newFieldType === 'bullets') && (
+                    <div className="p-3.5 rounded-xl bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                        Texto guía o placeholder (opcional):
+                      </label>
+                      <input
+                        type="text"
+                        value={newFieldPlaceholder}
+                        onChange={(e) => setNewFieldPlaceholder(e.target.value)}
+                        placeholder={
+                          newFieldType === 'bullets'
+                            ? 'Ej: Escribe 3 acciones concretas, una por línea...'
+                            : 'Ej: Escribe aquí con total libertad...'
+                        }
+                        className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {newFieldType === 'pair' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-white/90 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 block mb-1">Columna Izquierda</label>
+                        <input
+                          type="text"
+                          value={newFieldLeftLabel}
+                          onChange={(e) => setNewFieldLeftLabel(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-slate-500 block mb-1">Columna Derecha</label>
+                        <input
+                          type="text"
+                          value={newFieldRightLabel}
+                          onChange={(e) => setNewFieldRightLabel(e.target.value)}
+                          className="w-full bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
                     <button
                       type="button"
                       onClick={handleAddField}
-                      className={`px-3.5 py-2 font-bold text-xs rounded-xl flex items-center gap-1 transition-colors cursor-pointer w-full sm:w-auto justify-center shadow-sm ${
+                      className={`px-4 py-2.5 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm ${
                         isPurple ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-amber-500 hover:bg-amber-400 text-black'
                       }`}
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Añadir</span>
+                      <Plus className="w-4 h-4" />
+                      <span>Añadir Campo a la Actividad</span>
                     </button>
                   </div>
                 </div>

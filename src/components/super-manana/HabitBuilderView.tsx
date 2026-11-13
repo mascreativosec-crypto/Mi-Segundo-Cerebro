@@ -170,7 +170,7 @@ export const HabitBuilderView: React.FC<HabitBuilderViewProps> = ({
                       : 'text-slate-700 dark:text-slate-200 hover:bg-amber-500/15 hover:text-amber-800 dark:hover:text-amber-300'
                   }`}
                 >
-                  <strong className="block text-slate-900 dark:text-white">Guía Maestra ({isPurple ? '8 Fases' : '13 Fases'})</strong>
+                  <strong className="block text-slate-900 dark:text-white">Guía Maestra ({isPurple ? '8 Fases' : '23 Fases'})</strong>
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">La experiencia completa</span>
                 </button>
                 <button

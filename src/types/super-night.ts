@@ -190,3 +190,57 @@ export const SUPER_NOCHE_HABITS: SuperNightHabit[] = [
     ],
   },
 ];
+
+export interface IsraGarciaNightHabit {
+  id: string;
+  title: string;
+  timing: string;
+  description: string;
+  benefit: string;
+}
+
+export const ISRA_GARCIA_NIGHT_HABITS: IsraGarciaNightHabit[] = [
+  {
+    id: 'ig_digital_detox',
+    title: 'Desconexión Digital Radical',
+    timing: '45–60 min antes de dormir',
+    description: 'Apaga pantallas, activa modo avión y evita redes sociales, correos o luz azul que inhibe la melatonina.',
+    benefit: 'Reduce la hiperactivación dopaminérgica y acelera el sueño profundo.',
+  },
+  {
+    id: 'ig_quietud_danza',
+    title: 'Quietud, Silencio y "Danza Interna"',
+    timing: '10 min de descarga somática',
+    description: 'Dedica minutos de silencio total con respiración nasal profunda y movilidad suave para liberar tensión corporal.',
+    benefit: 'Activa el sistema nervioso parasimpático y serena la mente antes de acostarte.',
+  },
+  {
+    id: 'ig_agua_cierre',
+    title: 'Higiene del Agua (Ducha / Baño Relajante)',
+    timing: '30 min antes de la cama',
+    description: 'Toma una ducha templada o relajante como señal fisiológica de cierre del esfuerzo físico y mental del día.',
+    benefit: 'El descenso térmico posterior induce somnolencia natural de forma más rápida.',
+  },
+  {
+    id: 'ig_diario_sabiduria',
+    title: 'Pequeño Diario de Sabiduría Interna',
+    timing: '5–8 min en papel o bitácora',
+    description: 'Vacía pendientes en una nota para no rumiar en la cama y registra 1 lección esencial que te deja la jornada.',
+    benefit: 'Libera memoria de trabajo y previene despertares nocturnos por preocupaciones.',
+  },
+  {
+    id: 'ig_lectura_filosofica',
+    title: 'Lectura Filosófica sin Pantallas',
+    timing: '10–15 min antes de dormir',
+    description: 'Lee páginas físicas de estoicismo, filosofía práctica o biografías para nutrir tu mente con calma.',
+    benefit: 'Desplaza el estrés operativo por perspectiva serena y sabiduría atemporal.',
+  },
+  {
+    id: 'ig_binaural_hipnagogia',
+    title: 'Sonidos Binaurales y Afirmaciones Positivas',
+    timing: 'Últimos 5 min ya en cama',
+    description: 'Escucha frecuencias relajantes suaves o repite tus afirmaciones de gratitud y descanso reparador.',
+    benefit: 'Prepara el subconsciente durante el estado hipnagógico para un descanso óptimo.',
+  },
+];
+

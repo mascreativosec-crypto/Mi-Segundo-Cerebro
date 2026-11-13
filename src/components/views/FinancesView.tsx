@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppStoreData } from '../../services/storage';
 import { BankAccount, CreditAccount, CreditPayment, FinancialTransaction } from '../../types';
 import {
@@ -21,11 +21,15 @@ import {
 interface FinancesViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
+  initialAction?: 'add_tx' | null;
+  onClearInitialAction?: () => void;
 }
 
 export const FinancesView: React.FC<FinancesViewProps> = ({
   data,
   onUpdateData,
+  initialAction,
+  onClearInitialAction,
 }) => {
   const [activeTab, setActiveTab] = useState<'movimientos' | 'cuentas_pagar' | 'bancos' | 'distribucion'>('movimientos');
 
@@ -36,6 +40,14 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [txType, setTxType] = useState<FinancialTransaction['type']>('expense');
   const [txCategory, setTxCategory] = useState('Alimentación & Supermercado');
   const [txBankAccountId, setTxBankAccountId] = useState<string>(data.personalFinances.bankAccounts[0]?.id || '');
+
+  useEffect(() => {
+    if (initialAction === 'add_tx') {
+      setTxType('expense');
+      setShowAddTx(true);
+      onClearInitialAction?.();
+    }
+  }, [initialAction, onClearInitialAction]);
 
   // New Credit Account modal
   const [showAddCredit, setShowAddCredit] = useState(false);
@@ -932,7 +944,8 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     onChange={(e) => setTxType(e.target.value as any)}
                     className="w-full bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white"
                   >
-                    <option value="expense">Gasto / Salida</option>
+                    <option value="expense">Gasto / Pago Rápido</option>
+                    <option value="debt_payment">Pago Tarjeta / Crédito</option>
                     <option value="income">Ingreso / Entrada</option>
                     <option value="investment">Ahorro / Inversión</option>
                   </select>

@@ -1,17 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { ISuperNightReview, FailureSolutionPair, VerbalAwarenessCheck } from '../../types';
+import { ISuperNightReview, FailureSolutionPair, VerbalAwarenessCheck, MoodEntry } from '../../types';
 import {
   SuperNightHabit,
   SUPER_NOCHE_HABITS,
   DEFAULT_VERBAL_AWARENESS_ITEMS,
+  ISRA_GARCIA_NIGHT_HABITS,
 } from '../../types/super-night';
 import { RoutineMode, NightPrepCheckItem, DEFAULT_NIGHT_PREP_ITEMS } from '../../types/super-morning';
-import { IconRenderer } from '../../components/super-manana/IconRenderer';
 import { HabitBuilderView } from '../../components/super-manana/HabitBuilderView';
 import { ProgressView } from '../../components/super-manana/ProgressView';
 import { NightPrepView } from '../../components/super-manana/NightPrepView';
 import { SuperNightGuidedModal } from '../../components/super-night/SuperNightGuidedModal';
+import { StreakRecoveryProtocolCard } from '../../components/shared/StreakRecoveryProtocolCard';
 import { zenAudio } from '../../utils/audio';
+import { submitEmotionLog } from '../../services/emotionService';
 import {
   Moon,
   Star,
@@ -22,9 +24,7 @@ import {
   Circle,
   Plus,
   Trash2,
-  Clock,
   Play,
-  Sliders,
   Calendar,
   ShieldCheck,
   RotateCcw,
@@ -33,6 +33,7 @@ import {
   Heart,
   Sun,
   Bed,
+  Smile,
 } from 'lucide-react';
 
 interface SuperNightModuleProps {
@@ -40,21 +41,35 @@ interface SuperNightModuleProps {
   onUpdate: (updated: ISuperNightReview) => void;
   onTriggerReflectionCoach?: () => void;
   onNavigateToSuperMorning?: () => void;
+  todayMood?: MoodEntry;
+  onSyncMoodEntry?: (entry: MoodEntry) => void;
 }
+
+const NIGHT_EMOTION_LABELS = ['Sereno', 'Agradecido', 'Satisfecho', 'Determinado', 'Cansado', 'Estresado', 'Ansioso', 'Esperanzado'];
 
 export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
   review,
   onUpdate,
-  onTriggerReflectionCoach,
-  onNavigateToSuperMorning,
+  todayMood,
+  onSyncMoodEntry,
 }) => {
   const [activeTab, setActiveTab] = useState<'routine' | 'builder' | 'progress' | 'prep'>('routine');
   const [showGuidedModal, setShowGuidedModal] = useState(false);
 
   // Mode and streak
   const mode: RoutineMode = review.mode || 'balanced';
-  const currentStreak = review.currentStreak || 8;
-  const bestStreak = review.bestStreak || 20;
+  const nightLogs = (review.nightLogs as any[]) || [];
+  const currentStreak = review.currentStreak ?? 8;
+  const bestStreak = review.bestStreak ?? Math.max(20, currentStreak);
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const isNightDoneToday = nightLogs.some((l) => l.date === todayDateStr) || Boolean(review.completedAt);
+  const hasNightYesterday = nightLogs.some((l) => l.date === yesterdayStr);
+  const hasLostNightStreak =
+    !isNightDoneToday &&
+    (currentStreak === 0 || (nightLogs.length > 0 && !hasNightYesterday && currentStreak <= 1));
+  const israNightChecks = review.israNightChecks || {};
+  const israCompletedCount = ISRA_GARCIA_NIGHT_HABITS.filter((h) => Boolean(israNightChecks[h.id])).length;
 
   // Habits configuration
   const habits = (review.customHabits as any[]) || SUPER_NOCHE_HABITS;
@@ -95,6 +110,16 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
   const [newFailureInput, setNewFailureInput] = useState('');
   const [newSolutionInput, setNewSolutionInput] = useState('');
 
+  // Routine Emotional Evaluation state (inside Mi Rutina)
+  const [nightValence, setNightValence] = useState<number>(
+    typeof todayMood?.valence_score === 'number' ? todayMood.valence_score : 0.55
+  );
+  const [nightEmotionTags, setNightEmotionTags] = useState<string[]>(
+    todayMood?.emotion_labels && todayMood.emotion_labels.length > 0 ? todayMood.emotion_labels : ['Sereno']
+  );
+  const [nightEmotionNote, setNightEmotionNote] = useState<string>(todayMood?.triggers || '');
+  const [nightMoodSavedMsg, setNightMoodSavedMsg] = useState<string | null>(null);
+
   // Selected duration
   const selectedMinutes = useMemo(() => {
     if (mode === 'express') return 15;
@@ -134,10 +159,87 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
       subconsciousRequestCount: nextCount,
     });
     if (nextCount === 30) {
-      zenAudio.playFinishGong();
+      zenAudio.playNightSleepPad();
     } else {
-      zenAudio.playWarningTick();
+      zenAudio.playNightSoftTick();
     }
+  };
+
+  const countWords = (txt: string) => (txt.trim() ? txt.trim().split(/\s+/).length : 0);
+
+  const getDisplayLabelFromValence = (val: number) => {
+    if (val >= 0.6) return 'Muy agradable';
+    if (val >= 0.2) return 'Agradable';
+    if (val > -0.2) return 'Neutro / Equilibrado';
+    if (val > -0.6) return 'Desagradable';
+    return 'Muy desagradable';
+  };
+
+  const handleToggleNightEmotionTag = (label: string) => {
+    setNightEmotionTags((prev) =>
+      prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label]
+    );
+  };
+
+  const handleSaveRoutineEmotion = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!onSyncMoodEntry) return;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const displayLabel = getDisplayLabelFromValence(nightValence);
+    const labelsToSave = nightEmotionTags.length > 0 ? nightEmotionTags : ['Sereno'];
+    const mappedScore1to5 = Math.max(1, Math.min(5, Math.round(((nightValence + 1) / 2) * 4 + 1)));
+
+    const entry: MoodEntry = {
+      id: todayMood?.id || `me_${Date.now()}`,
+      date: todayStr,
+      timestamp: new Date().toISOString(),
+      score: mappedScore1to5,
+      valence_score: nightValence,
+      display_label: displayLabel,
+      emotion_labels: labelsToSave,
+      associations: todayMood?.associations || ['Cierre Nocturno'],
+      moodLabel: `${displayLabel} · ${labelsToSave.join(', ')}`,
+      primaryEmotion: (labelsToSave[0] as MoodEntry['primaryEmotion']) || 'Calma',
+      triggers: nightEmotionNote.trim() || 'Evaluación emocional dentro de la rutina Súper Noche',
+      reflection: todayMood?.reflection || 'Observación nocturna de cierre.',
+      thoughtManagement: todayMood?.thoughtManagement || 'Cierre sereno de jornada.',
+    };
+    onSyncMoodEntry(entry);
+    await submitEmotionLog({
+      timestamp: entry.timestamp!,
+      valence_score: nightValence,
+      display_label: displayLabel,
+      emotion_labels: labelsToSave,
+      associations: entry.associations || [],
+    });
+    setNightMoodSavedMsg(`Estado emocional guardado (${displayLabel}).`);
+    setTimeout(() => setNightMoodSavedMsg(null), 3500);
+  };
+
+  const handleRecoverNightStreak = (frictionReason: string, recoveryNote: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nextStreak = Math.max(2, currentStreak + 1);
+    const recoveryLog = {
+      date: todayStr,
+      mode: 'express' as RoutineMode,
+      totalDurationSeconds: 300,
+      completedHabitIds: ['rescate_nocturno'],
+      responses: {
+        rescate: {
+          friccion: frictionReason,
+          ajuste: recoveryNote || 'Cierre nocturno express de 5 minutos completado.',
+        },
+      },
+      sleepTargetHours: review.plannedSleepHours || 7.5,
+      nightRating: review.dayRating || 4,
+      isRecovery: true,
+    };
+    onUpdate({
+      ...review,
+      currentStreak: nextStreak,
+      bestStreak: Math.max(bestStreak, nextStreak),
+      nightLogs: [recoveryLog, ...(review.nightLogs || []).filter((l) => l.date !== todayStr)],
+    });
   };
 
   const handleResetSubconscious = () => {
@@ -318,7 +420,22 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
             {/* 3 Metric Stats Cards */}
             <div className="grid grid-cols-3 gap-3 pt-2">
               <div className="p-3.5 rounded-2xl bg-slate-100/70 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.05]">
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">Racha Nocturna</span>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Racha Nocturna</span>
+                  {hasLostNightStreak && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById('night-streak-recovery')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }
+                      className="text-[10px] font-bold text-purple-600 dark:text-purple-300 hover:underline cursor-pointer"
+                    >
+                      Rescatar
+                    </button>
+                  )}
+                </div>
                 <span className="text-lg md:text-xl font-extrabold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 mt-0.5 tracking-tight">
                   <Flame className="w-4 h-4 fill-purple-500 text-purple-500" />
                   {currentStreak} {currentStreak === 1 ? 'noche' : 'noches'}
@@ -339,6 +456,25 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
                 </span>
               </div>
             </div>
+
+            {hasLostNightStreak && (
+              <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-xs text-purple-900 dark:text-purple-200 font-medium">
+                  ¿Se rompió tu racha nocturna? Ejecuta el protocolo de cierre express de 5 min (Nunca falles 2 noches).
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById('night-streak-recovery')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
+                  className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shrink-0 cursor-pointer"
+                >
+                  Ir al Protocolo de Rescate ↓
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -438,6 +574,213 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
             </button>
           </div>
 
+          {/* SECTION 0 (DENTRO DE LA RUTINA): EVALUACIÓN DE ESTADO EMOCIONAL DE HOY */}
+          {onSyncMoodEntry && (
+            <form
+              onSubmit={handleSaveRoutineEmotion}
+              className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-purple-500/25 shadow-xl space-y-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <Smile className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Evaluación de tu Estado Emocional Hoy
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Registra cómo cierras emocionalmente tu día dentro de tu rutina de Súper Noche.
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold px-3 py-1 rounded-xl bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25">
+                  {getDisplayLabelFromValence(nightValence)} ({nightValence >= 0 ? '+' : ''}{nightValence.toFixed(2)})
+                </span>
+              </div>
+
+              {nightMoodSavedMsg && (
+                <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{nightMoodSavedMsg}</span>
+                </div>
+              )}
+
+              <div className="p-4 rounded-2xl bg-slate-100/80 dark:bg-black/35 border border-slate-200 dark:border-white/10 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+                  <span>Nivel de Valencia Emocional (-1.0 a +1.0)</span>
+                  <span className="tabular-nums text-purple-600 dark:text-purple-400">
+                    {nightValence >= 0 ? '+' : ''}{nightValence.toFixed(2)} · {getDisplayLabelFromValence(nightValence)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={-1}
+                  max={1}
+                  step={0.05}
+                  value={nightValence}
+                  onChange={(e) => setNightValence(parseFloat(e.target.value))}
+                  className="w-full accent-purple-500 cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] font-semibold text-slate-500">
+                  <span>Muy desagradable (-1.0)</span>
+                  <span>Neutro (0.0)</span>
+                  <span>Muy agradable (+1.0)</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  ¿Qué emociones definen el cierre de hoy?
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {NIGHT_EMOTION_LABELS.map((lbl) => {
+                    const active = nightEmotionTags.includes(lbl);
+                    return (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => handleToggleNightEmotionTag(lbl)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                          active
+                            ? 'bg-purple-600 text-white border-purple-500 shadow-xs'
+                            : 'bg-slate-100/80 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:border-purple-400'
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                <input
+                  type="text"
+                  value={nightEmotionNote}
+                  onChange={(e) => setNightEmotionNote(e.target.value)}
+                  placeholder="¿Qué generó este estado emocional hoy? (opcional)..."
+                  className="flex-1 bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white"
+                />
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md cursor-pointer shrink-0"
+                >
+                  Guardar Estado Emocional
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* SECTION 0B: HÁBITOS ANTES DE DORMIR "LA GRAN NOCHE" (ISRA GARCÍA) */}
+          <div className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-purple-500/25 shadow-xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-purple-500/20 shrink-0">
+                  <Bed className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Ritual &quot;La Gran Noche&quot; · Hábitos Antes de Dormir (Isra García)
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+                      Higiene del Sueño &amp; Alto Rendimiento
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Secuencia nocturna para desconectar del ruido digital, descargar el sistema nervioso y dormir profundamente.
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-xs font-bold text-purple-800 dark:text-purple-300 bg-purple-500/15 dark:bg-purple-500/20 px-3 py-1 rounded-full border border-purple-500/30 tabular-nums">
+                {israCompletedCount} / {ISRA_GARCIA_NIGHT_HABITS.length} completados
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {ISRA_GARCIA_NIGHT_HABITS.map((habit) => {
+                const checked = Boolean(israNightChecks[habit.id]);
+                return (
+                  <button
+                    key={habit.id}
+                    type="button"
+                    onClick={() =>
+                      onUpdate({
+                        ...review,
+                        israNightChecks: {
+                          ...israNightChecks,
+                          [habit.id]: !checked,
+                        },
+                      })
+                    }
+                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
+                      checked
+                        ? 'bg-gradient-to-br from-purple-500/15 to-indigo-500/10 border-purple-500/45 shadow-xs'
+                        : 'bg-slate-100/70 dark:bg-black/35 border-slate-200/80 dark:border-white/[0.06] hover:border-purple-500/35'
+                    }`}
+                  >
+                    <div className="mt-0.5 shrink-0">
+                      {checked ? (
+                        <CheckCircle2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      ) : (
+                        <Circle className="w-5 h-5 text-slate-400 dark:text-slate-600 hover:text-purple-500" />
+                      )}
+                    </div>
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span
+                          className={`text-xs font-bold ${
+                            checked
+                              ? 'text-purple-900 dark:text-purple-100'
+                              : 'text-slate-900 dark:text-white'
+                          }`}
+                        >
+                          {habit.title}
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                          {habit.timing}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {habit.description}
+                      </p>
+                      <p className="text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
+                        Beneficio: {habit.benefit}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <input
+                type="text"
+                value={review.israNightNotes || ''}
+                onChange={(e) => onUpdate({ ...review, israNightNotes: e.target.value })}
+                placeholder="Nota rápida de desconexión nocturna (ej. hora exacta en que dejaste pantallas hoy)..."
+                className="flex-1 bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-purple-500"
+              />
+              {israCompletedCount < ISRA_GARCIA_NIGHT_HABITS.length && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allChecked: Record<string, boolean> = {};
+                    ISRA_GARCIA_NIGHT_HABITS.forEach((h) => {
+                      allChecked[h.id] = true;
+                    });
+                    onUpdate({ ...review, israNightChecks: allChecked });
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-700 dark:text-purple-300 border border-purple-500/30 text-xs font-bold cursor-pointer shrink-0"
+                >
+                  Marcar ritual completo
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* SECTION 1: QUÉ VICTORIA TUVE EL DÍA DE HOY */}
           <div className="p-6 md:p-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-xl space-y-4">
             <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
@@ -450,13 +793,19 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
               </div>
             </div>
 
-            <textarea
-              rows={3}
-              value={mainVictory}
-              onChange={(e) => onUpdate({ ...review, mainVictory: e.target.value })}
-              placeholder="Tener una introspección más clara de mí mismo y qué debo mejorar..."
-              className="w-full bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 transition-colors resize-none leading-relaxed"
-            />
+            <div className="space-y-1.5">
+              <div className="flex justify-end">
+                <span className="text-[10px] text-slate-400 tabular-nums">{countWords(mainVictory)} / 1000 palabras</span>
+              </div>
+              <textarea
+                rows={5}
+                maxLength={7500}
+                value={mainVictory}
+                onChange={(e) => onUpdate({ ...review, mainVictory: e.target.value })}
+                placeholder="Tener una introspección más clara de mí mismo y qué debo mejorar..."
+                className="w-full min-h-[130px] bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 transition-colors resize-y leading-relaxed"
+              />
+            </div>
           </div>
 
           {/* SECTION 2: QUÉ MOMENTO DE MAGIA TUVE & TIKÚN */}
@@ -473,24 +822,32 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-purple-700 dark:text-purple-300 block">Momento de Magia / Sincronicidad</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-purple-700 dark:text-purple-300 block">Momento de Magia / Sincronicidad</label>
+                  <span className="text-[10px] text-slate-400 tabular-nums">{countWords(magicMoment)} / 1000</span>
+                </div>
                 <textarea
-                  rows={3}
+                  rows={5}
+                  maxLength={7500}
                   value={magicMoment}
                   onChange={(e) => onUpdate({ ...review, magicMoment: e.target.value })}
                   placeholder="Saber qué tikún tocar y sentir el fluir de la providencia..."
-                  className="w-full bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full min-h-[130px] bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-purple-700 dark:text-purple-300 block">Sentido de Tikún & Responsabilidad</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-purple-700 dark:text-purple-300 block">Sentido de Tikún & Responsabilidad</label>
+                  <span className="text-[10px] text-slate-400 tabular-nums">{countWords(tikunReflection)} / 1000</span>
+                </div>
                 <textarea
-                  rows={3}
+                  rows={5}
+                  maxLength={7500}
                   value={tikunReflection}
                   onChange={(e) => onUpdate({ ...review, tikunReflection: e.target.value })}
                   placeholder="Saber que muchas familias y personas dependen de que yo no falle..."
-                  className="w-full bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full min-h-[130px] bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-3.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
                 />
               </div>
             </div>
@@ -668,13 +1025,19 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
               </div>
             </div>
 
-            <textarea
-              rows={2}
-              value={newThingsDone}
-              onChange={(e) => onUpdate({ ...review, newThingsDone: e.target.value })}
-              placeholder="Contar mis experiencias, atreverme a liderar desde la vulnerabilidad..."
-              className="w-full bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none"
-            />
+            <div className="space-y-1.5">
+              <div className="flex justify-end">
+                <span className="text-[10px] text-slate-400 tabular-nums">{countWords(newThingsDone)} / 1000 palabras</span>
+              </div>
+              <textarea
+                rows={4}
+                maxLength={7500}
+                value={newThingsDone}
+                onChange={(e) => onUpdate({ ...review, newThingsDone: e.target.value })}
+                placeholder="Contar mis experiencias, atreverme a liderar desde la vulnerabilidad..."
+                className="w-full min-h-[115px] bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
+              />
+            </div>
           </div>
 
           {/* SECTION 7: PETICIÓN SUBCONSCIENTE (30 VECES EN LA MENTE) */}
@@ -752,14 +1115,31 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
               </div>
             </div>
 
-            <textarea
-              rows={3}
-              value={dayConclusion}
-              onChange={(e) => onUpdate({ ...review, dayConclusion: e.target.value })}
-              placeholder="Conclusión del día..."
-              className="w-full bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none leading-relaxed"
-            />
+            <div className="space-y-1.5">
+              <div className="flex justify-end">
+                <span className="text-[10px] text-slate-400 tabular-nums">{countWords(dayConclusion)} / 1000 palabras</span>
+              </div>
+              <textarea
+                rows={5}
+                maxLength={7500}
+                value={dayConclusion}
+                onChange={(e) => onUpdate({ ...review, dayConclusion: e.target.value })}
+                placeholder="Conclusión del día..."
+                className="w-full min-h-[130px] bg-slate-100/70 dark:bg-black/40 border border-slate-300 dark:border-purple-500/20 rounded-2xl p-4 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-y leading-relaxed"
+              />
+            </div>
           </div>
+
+          {/* Protocolo de Rescate al final de todos los bloques de Súper Noche */}
+          <StreakRecoveryProtocolCard
+            id="night-streak-recovery"
+            theme="purple"
+            moduleLabel="Súper Noche"
+            hasLostStreak={hasLostNightStreak}
+            isDoneToday={isNightDoneToday}
+            currentStreak={currentStreak}
+            onRecoverStreak={handleRecoverNightStreak}
+          />
         </div>
       )}
 
@@ -780,6 +1160,7 @@ export const SuperNightModule: React.FC<SuperNightModuleProps> = ({
           currentStreak={currentStreak}
           bestStreak={bestStreak}
           theme="purple"
+          onRecoverStreak={handleRecoverNightStreak}
         />
       )}
 
