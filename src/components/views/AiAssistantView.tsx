@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AppStoreData } from '../../services/storage';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   Bot,
   Send,
@@ -53,6 +54,32 @@ const blobToBase64 = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob);
   });
 
+const pickSupportedRecorderMime = (): string | undefined => {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return undefined;
+  }
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+  ];
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+};
+
+const inferAttachmentMime = (file: File): string => {
+  if (file.type) return file.type.split(';')[0].trim();
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith('.m4a') || lower.endsWith('.mp4') || lower.endsWith('.aac')) return 'audio/mp4';
+  if (lower.endsWith('.mp3')) return 'audio/mpeg';
+  if (lower.endsWith('.wav')) return 'audio/wav';
+  if (lower.endsWith('.ogg') || lower.endsWith('.opus')) return 'audio/ogg';
+  if (lower.endsWith('.webm')) return 'audio/webm';
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  return 'image/png';
+};
+
 const VALID_ORIGINS: ReminderOriginModule[] = [
   'personal',
   'business',
@@ -94,6 +121,10 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingSecondsRef = useRef<number>(0);
+  const pendingStopResolveRef = useRef<
+    ((payload: { base64: string; mimeType: string; label: string } | null) => void) | null
+  >(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Webhook simulator for Channels tab
@@ -102,51 +133,88 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
   const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
 
   const startVoice = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: 'assistant',
+          text: 'Tu navegador no soporta grabación directa. Puedes adjuntar una nota de voz o escribir tu solicitud.',
+          timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const preferredMime = pickSupportedRecorderMime();
+      const recorder = preferredMime
+        ? new MediaRecorder(stream, { mimeType: preferredMime })
+        : new MediaRecorder(stream);
+      const resolvedMime = (recorder.mimeType || preferredMime || 'audio/webm').split(';')[0].trim();
       chunksRef.current = [];
       recorder.ondataavailable = (ev) => {
-        if (ev.data.size > 0) chunksRef.current.push(ev.data);
+        if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
       };
       recorder.onstop = async () => {
         stream.getTracks().forEach((tr) => tr.stop());
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        const base64 = await blobToBase64(blob);
-        setAudioData({
-          base64,
-          mimeType,
-          label: `Nota de voz (${Math.max(1, recordingSeconds)}s)`,
-        });
+        const elapsed = Math.max(1, recordingSecondsRef.current);
+        const blob = new Blob(chunksRef.current, { type: resolvedMime });
+        if (blob.size === 0) {
+          pendingStopResolveRef.current?.(null);
+          pendingStopResolveRef.current = null;
+          return;
+        }
+        try {
+          const base64 = await blobToBase64(blob);
+          const payload = {
+            base64,
+            mimeType: resolvedMime,
+            label: `Nota de voz (${elapsed}s)`,
+          };
+          setAudioData(payload);
+          pendingStopResolveRef.current?.(payload);
+        } catch {
+          pendingStopResolveRef.current?.(null);
+        } finally {
+          pendingStopResolveRef.current = null;
+        }
       };
       mediaRecorderRef.current = recorder;
-      recorder.start();
+      recorder.start(500);
       setIsRecording(true);
+      recordingSecondsRef.current = 0;
       setRecordingSeconds(0);
-      timerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+      timerRef.current = setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingSeconds(recordingSecondsRef.current);
+      }, 1000);
     } catch {
       setMessages((prev) => [
         ...prev,
         {
           id: `err_${Date.now()}`,
           role: 'assistant',
-          text: 'No se pudo activar el micrófono. Escribe tu solicitud o adjunta un comprobante.',
+          text: 'No se pudo activar el micrófono. Escribe tu solicitud o adjunta una nota de voz/comprobante.',
           timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     }
   };
 
-  const stopVoice = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-    }
+  const stopVoice = (): Promise<{ base64: string; mimeType: string; label: string } | null> => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
     setIsRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      return new Promise((resolve) => {
+        pendingStopResolveRef.current = resolve;
+        mediaRecorderRef.current?.stop();
+      });
+    }
+    return Promise.resolve(audioData);
   };
 
   const handleAttachFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,11 +222,20 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
     if (!file) return;
     try {
       const base64 = await blobToBase64(file);
-      setFileData({
-        base64,
-        mimeType: file.type || 'image/png',
-        name: file.name,
-      });
+      const mimeType = inferAttachmentMime(file);
+      if (mimeType.startsWith('audio/')) {
+        setAudioData({
+          base64,
+          mimeType,
+          label: file.name,
+        });
+      } else {
+        setFileData({
+          base64,
+          mimeType,
+          name: file.name,
+        });
+      }
     } finally {
       e.target.value = '';
     }
@@ -341,22 +418,25 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
 
   const handleSend = async (customText?: string) => {
     const promptText = (customText ?? input).trim();
-    if (!promptText && !audioData && !fileData) return;
+    let currentAudio = audioData;
+    if (isRecording && !customText) {
+      currentAudio = await stopVoice();
+    }
+    const currentFile = fileData;
+    if (!promptText && !currentAudio && !currentFile) return;
 
     const userMsg: ChatMessage = {
       id: `u_${Date.now()}`,
       role: 'user',
       text:
         promptText ||
-        (fileData ? `Comprobante adjunto: ${fileData.name}` : audioData?.label || 'Audio enviado'),
-      attachmentName: fileData?.name || audioData?.label,
+        (currentFile ? `Comprobante adjunto: ${currentFile.name}` : currentAudio?.label || 'Audio enviado'),
+      attachmentName: currentFile?.name || currentAudio?.label,
       timestamp: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    const currentAudio = audioData;
-    const currentFile = fileData;
     setAudioData(null);
     setFileData(null);
     setIsSending(true);
@@ -378,22 +458,29 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
         pendingReminders: (data.notesReminders || []).filter((r) => !r.completed).length,
       };
 
-      const resp = await fetch('/api/gemini/assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: promptText,
-          audioBase64: currentAudio?.base64,
-          audioMimeType: currentAudio?.mimeType,
-          fileBase64: currentFile?.base64,
-          fileMimeType: currentFile?.mimeType,
-          appSnapshot,
-        }),
-      });
+      const { ok, status, data: result } = await fetchJsonWithTimeout<{
+        reply?: string;
+        actions?: { name: string; args: Record<string, unknown> }[];
+        error?: string;
+      }>(
+        '/api/gemini/assistant',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: promptText,
+            audioBase64: currentAudio?.base64,
+            audioMimeType: currentAudio?.mimeType,
+            fileBase64: currentFile?.base64,
+            fileMimeType: currentFile?.mimeType,
+            appSnapshot,
+          }),
+        },
+        70000
+      );
 
-      const result = await resp.json();
-      if (!resp.ok) {
-        throw new Error(result.error || 'Error procesando solicitud');
+      if (!ok) {
+        throw new Error(result.error || `Error procesando solicitud (${status})`);
       }
 
       const actions = Array.isArray(result.actions) ? result.actions : [];
@@ -434,16 +521,27 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
     if (!testWebhookText.trim()) return;
     setWebhookStatus('Enviando payload al webhook...');
     try {
-      const resp = await fetch('/api/integrations/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: testChannel,
-          sender: 'usuario_vip',
-          text: testWebhookText.trim(),
-        }),
-      });
-      const res = await resp.json();
+      const { ok, status, data: res } = await fetchJsonWithTimeout<{
+        actions?: { name: string; args: Record<string, unknown> }[];
+        parsedAction?: { name: string; args: Record<string, unknown> };
+        reply?: string;
+        error?: string;
+      }>(
+        '/api/integrations/webhook',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: testChannel,
+            sender: 'usuario_vip',
+            text: testWebhookText.trim(),
+          }),
+        },
+        70000
+      );
+      if (!ok) {
+        throw new Error(res.error || `Error HTTP ${status}`);
+      }
       const parsedActions = res.actions || (res.parsedAction ? [res.parsedAction] : []);
       if (parsedActions.length > 0) {
         applyAssistantActions(parsedActions);
@@ -452,8 +550,8 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
         `Canal ${testChannel.toUpperCase()} procesado: ${res.reply || 'Acción aplicada en el sistema.'}`
       );
       setTestWebhookText('');
-    } catch {
-      setWebhookStatus('Error al probar el webhook.');
+    } catch (err: unknown) {
+      setWebhookStatus(err instanceof Error ? err.message : 'Error al probar el webhook.');
     }
   };
 
@@ -463,7 +561,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
       <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/25 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-fuchsia-600 via-pink-600 to-rose-500 flex items-center justify-center text-white shadow-lg shadow-fuchsia-500/25 shrink-0">
               <Bot className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
@@ -476,28 +574,29 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
             </div>
           </div>
 
-          <div className="p-1.5 rounded-2xl bg-slate-100/80 dark:bg-black/40 border border-slate-200/80 dark:border-white/[0.06] flex items-center gap-1 self-start sm:self-auto">
+          <div className="p-1.5 rounded-2xl bg-slate-100/80 dark:bg-black/40 border border-slate-200/80 dark:border-white/[0.06] grid grid-cols-2 sm:flex items-center gap-1 w-full sm:w-auto">
             <button
               onClick={() => setActiveTab('assistant')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                 activeTab === 'assistant'
-                  ? 'bg-white dark:bg-slate-800 text-cyan-600 dark:text-cyan-400 shadow-sm'
+                  ? 'bg-white dark:bg-slate-800 text-fuchsia-600 dark:text-fuchsia-400 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Asistente Operativo</span>
+              <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Asistente</span>
             </button>
             <button
               onClick={() => setActiveTab('channels')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                 activeTab === 'channels'
-                  ? 'bg-white dark:bg-slate-800 text-cyan-600 dark:text-cyan-400 shadow-sm'
+                  ? 'bg-white dark:bg-slate-800 text-fuchsia-600 dark:text-fuchsia-400 shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'
               }`}
             >
-              <Globe className="w-3.5 h-3.5" />
-              <span>WhatsApp / Telegram / Correo</span>
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+              <span className="sm:hidden truncate">Canales</span>
+              <span className="hidden sm:inline">WhatsApp / Telegram / Correo</span>
             </button>
           </div>
         </div>
@@ -506,7 +605,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
       {activeTab === 'assistant' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Chat Workspace (8 Cols) */}
-          <div className="lg:col-span-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl flex flex-col h-[600px]">
+          <div className="lg:col-span-8 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl flex flex-col h-[500px] sm:h-[600px] overflow-hidden">
             {/* Messages Feed */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {messages.map((msg) => (
@@ -517,7 +616,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                   <div
                     className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed shadow-sm ${
                       msg.role === 'user'
-                        ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white'
+                        ? 'bg-gradient-to-r from-fuchsia-600 to-pink-600 text-white'
                         : 'bg-slate-100/90 dark:bg-black/40 border border-slate-200/80 dark:border-white/[0.08] text-slate-800 dark:text-slate-100'
                     }`}
                   >
@@ -535,7 +634,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                           <button
                             key={idx}
                             onClick={() => act.targetView && onNavigate(act.targetView)}
-                            className="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"
+                            className="px-2.5 py-1.5 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/30 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold flex items-center gap-1.5 cursor-pointer"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                             <span>{act.label}</span>
@@ -549,7 +648,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                 </div>
               ))}
               {isSending && (
-                <div className="text-xs text-cyan-600 dark:text-cyan-400 font-semibold px-2">
+                <div className="text-xs text-fuchsia-600 dark:text-fuchsia-400 font-semibold px-2">
                   Ejecutando en Segundo Cerebro 4.0...
                 </div>
               )}
@@ -559,7 +658,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
             {(audioData || fileData) && (
               <div className="px-5 py-2 border-t border-slate-200/80 dark:border-white/[0.06] flex flex-wrap gap-2 bg-slate-50/80 dark:bg-black/30">
                 {audioData && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 text-xs font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 text-xs font-semibold">
                     <Mic className="w-3.5 h-3.5" />
                     {audioData.label}
                     <button onClick={() => setAudioData(null)} className="cursor-pointer">
@@ -568,7 +667,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                   </span>
                 )}
                 {fileData && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-pink-500/15 text-pink-700 dark:text-pink-300 text-xs font-semibold">
                     <Paperclip className="w-3.5 h-3.5" />
                     {fileData.name}
                     <button onClick={() => setFileData(null)} className="cursor-pointer">
@@ -585,37 +684,8 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                 e.preventDefault();
                 handleSend();
               }}
-              className="p-4 border-t border-slate-200/80 dark:border-white/[0.08] flex items-center gap-2"
+              className="p-3 sm:p-4 border-t border-slate-200/80 dark:border-white/[0.08] flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-2"
             >
-              <button
-                type="button"
-                onClick={isRecording ? stopVoice : startVoice}
-                className={`p-2.5 rounded-xl border transition-colors cursor-pointer shrink-0 ${
-                  isRecording
-                    ? 'bg-rose-600 text-white border-rose-500'
-                    : 'bg-slate-100 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-cyan-500'
-                }`}
-                title={isRecording ? 'Detener grabación' : 'Dictar por voz'}
-              >
-                {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2.5 rounded-xl bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-cyan-500 transition-colors cursor-pointer shrink-0"
-                title="Adjuntar comprobante de transferencia (Imagen o PDF)"
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.pdf"
-                onChange={handleAttachFile}
-                className="hidden"
-              />
-
               <input
                 type="text"
                 value={input}
@@ -625,17 +695,52 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                     ? `Grabando nota de voz (${recordingSeconds}s)...`
                     : 'Ej: "Registra pago de $85 en internet", "Recuérdame llamar al contador mañana"...'
                 }
-                className="flex-1 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                className="w-full sm:flex-1 min-w-0 sm:order-2 bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
 
-              <button
-                type="submit"
-                disabled={isSending}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer shrink-0"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Ejecutar</span>
-              </button>
+              <div className="flex items-center justify-between gap-2 sm:contents">
+                <div className="flex items-center gap-2 sm:order-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopVoice : startVoice}
+                    className={`h-9 sm:h-auto px-3 sm:p-2.5 rounded-xl border transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold ${
+                      isRecording
+                        ? 'bg-rose-600 text-white border-rose-500'
+                        : 'bg-slate-100 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-fuchsia-500'
+                    }`}
+                    title={isRecording ? 'Detener grabación' : 'Dictar por voz'}
+                  >
+                    {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
+                    <span className="sm:hidden">{isRecording ? `${recordingSeconds}s` : 'Voz'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-9 sm:h-auto px-3 sm:p-2.5 rounded-xl bg-slate-100 dark:bg-black/40 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-fuchsia-500 transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-semibold"
+                    title="Adjuntar comprobante de transferencia (Imagen o PDF)"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                    <span className="sm:hidden">Adjuntar</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.pdf,audio/*,.m4a,.mp3,.wav,.ogg,.opus,.webm,.aac"
+                    onChange={handleAttachFile}
+                    className="hidden"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSending}
+                  className="h-9 sm:h-auto px-4 py-2 sm:py-2.5 sm:order-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer shrink-0"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Ejecutar</span>
+                </button>
+              </div>
             </form>
           </div>
 
@@ -643,7 +748,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
           <div className="lg:col-span-4 space-y-4">
             <div className="p-5 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg space-y-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-cyan-500" />
+                <Sparkles className="w-4 h-4 text-fuchsia-500" />
                 Comandos Rápidos del Sistema
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -655,9 +760,9 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                   onClick={() =>
                     handleSend('Recuérdame revisar el flujo de caja mañana a las 09:00')
                   }
-                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-cyan-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
+                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-fuchsia-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
                 >
-                  <BellRing className="w-4 h-4 text-violet-500 shrink-0" />
+                  <BellRing className="w-4 h-4 text-purple-500 shrink-0" />
                   <span className="text-slate-700 dark:text-slate-200">
                     Crear recordatorio en bandeja
                   </span>
@@ -667,9 +772,9 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                   onClick={() =>
                     handleSend('Agenda tarea empresarial urgente: Enviar propuesta comercial hoy')
                   }
-                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-cyan-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
+                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-fuchsia-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
                 >
-                  <CheckSquare className="w-4 h-4 text-teal-500 shrink-0" />
+                  <CheckSquare className="w-4 h-4 text-orange-500 shrink-0" />
                   <span className="text-slate-700 dark:text-slate-200">
                     Agendar tarea ejecutiva urgente
                   </span>
@@ -679,7 +784,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
                   onClick={() =>
                     handleSend('Registra un gasto personal de $45 en alimentación')
                   }
-                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-cyan-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
+                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-fuchsia-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
                 >
                   <DollarSign className="w-4 h-4 text-emerald-500 shrink-0" />
                   <span className="text-slate-700 dark:text-slate-200">
@@ -689,7 +794,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
 
                 <button
                   onClick={() => handleSend('Abrir Súper Mañana')}
-                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-cyan-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
+                  className="w-full p-3 rounded-2xl bg-slate-50 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] hover:border-fuchsia-500/40 text-left text-xs flex items-center gap-2.5 cursor-pointer"
                 >
                   <Compass className="w-4 h-4 text-amber-500 shrink-0" />
                   <span className="text-slate-700 dark:text-slate-200">
@@ -723,7 +828,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto space-y-2">
-              <div className="text-cyan-400 font-bold">POST /api/integrations/webhook</div>
+              <div className="text-fuchsia-400 font-bold">POST /api/integrations/webhook</div>
               <pre className="text-[11px] leading-relaxed text-slate-300">{`{
   "channel": "whatsapp" | "telegram" | "email",
   "sender": "+593999000000",
@@ -797,14 +902,14 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-bold text-xs cursor-pointer"
               >
                 Probar Procesamiento Webhook
               </button>
             </form>
 
             {webhookStatus && (
-              <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-xs text-cyan-800 dark:text-cyan-200">
+              <div className="p-3 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/25 text-xs text-fuchsia-800 dark:text-fuchsia-200">
                 {webhookStatus}
               </div>
             )}

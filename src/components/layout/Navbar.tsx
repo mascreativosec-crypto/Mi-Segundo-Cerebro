@@ -1,36 +1,39 @@
 import React from 'react';
-import { Sparkles, Download, Upload, Plus, Bell, Sun, Moon, LayoutGrid, ChevronLeft } from 'lucide-react';
+import { Sparkles, Download, Upload, Bell, Sun, Moon, LayoutGrid, ChevronLeft, LogOut } from 'lucide-react';
 import { AppNotification } from '../../types';
 import { getNavItemMeta } from './navConfig';
 
 interface NavbarProps {
   activeView: string;
   onNavigate: (view: string) => void;
-  onOpenQuickCapture: () => void;
+  onOpenQuickCapture?: () => void;
   onExportBackup: () => void;
   onImportBackup: (file: File) => void;
   notifications: AppNotification[];
   onOpenNotifications: () => void;
   userName: string;
+  userAvatar?: string;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
   onOpenMobileMenu?: () => void;
+  onLogout?: () => void;
 }
 
-const PRIMARY_MOBILE_TABS = new Set(['mi_dia', 'personal_dashboard', 'tasks_general', 'mobile_modules']);
+const PRIMARY_MOBILE_TABS = new Set(['mi_dia', 'personal_dashboard', 'tasks_general', 'ai_assistant', 'mobile_modules']);
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeView,
   onNavigate,
-  onOpenQuickCapture,
   onExportBackup,
   onImportBackup,
   notifications,
   onOpenNotifications,
   userName,
+  userAvatar,
   theme,
   onToggleTheme,
   onOpenMobileMenu,
+  onLogout,
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -116,6 +119,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 shadow-sm" />
             )}
           </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate('backup_settings')}
+            className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden border border-slate-300/70 dark:border-white/15 shrink-0 cursor-pointer"
+            title={`${userName} — Editar perfil y foto`}
+            aria-label="Editar perfil y foto"
+          >
+            {userAvatar ? (
+              <img
+                src={userAvatar}
+                alt={userName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="w-full h-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                {(userName || 'U').charAt(0).toUpperCase()}
+              </span>
+            )}
+          </button>
+
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-rose-500 hover:bg-slate-200/60 dark:hover:bg-white/[0.08] active:scale-95 transition-all cursor-pointer"
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -145,19 +180,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 2: Zen Apple Actions & Prominent Theme Switcher */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* Quick Capture Button (Primary Action) */}
-          <button
-            onClick={onOpenQuickCapture}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold text-xs rounded-xl transition-all shadow-md shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer whitespace-nowrap shrink-0"
-            title="Captura Rápida (Cmd + K)"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Capturar</span>
-            <span className="hidden sm:inline-block text-[10px] bg-white/20 px-1.5 py-0.5 rounded-md font-semibold text-white/90">⌘K</span>
-          </button>
-
-          <div className="h-4 w-px bg-slate-200 dark:bg-white/[0.1] hidden sm:block" />
-
           {/* Prominent Apple Liquid Glass Theme Switcher (Claro / Oscuro) */}
           <button
             onClick={onToggleTheme}
@@ -218,12 +240,38 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="flex items-center gap-2 pl-2 border-l border-slate-300 dark:border-slate-800">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-              {userName.charAt(0)}
-            </div>
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 hidden md:inline truncate max-w-[120px]">
-              {userName}
-            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate('backup_settings')}
+              title="Editar perfil y foto en Configuración"
+              className="flex items-center gap-2 px-1.5 py-1 rounded-xl hover:bg-slate-200/60 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
+            >
+              {userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  className="w-7 h-7 rounded-full object-cover border border-slate-300/80 dark:border-white/15 shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
+                  {(userName || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 hidden md:inline truncate max-w-[140px]">
+                {userName}
+              </span>
+            </button>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="p-2 text-slate-500 dark:text-slate-400 hover:text-rose-500 hover:bg-slate-200/60 dark:hover:bg-white/[0.06] rounded-xl transition-colors cursor-pointer"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </div>

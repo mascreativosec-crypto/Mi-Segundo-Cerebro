@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AppStoreData } from '../../services/storage';
 import { BusinessTask, PillarKey, TaskSubtask } from '../../types';
@@ -26,13 +26,18 @@ import {
   FolderKanban,
   ArrowUpRight,
   FileText,
+  NotebookPen,
 } from 'lucide-react';
+import { LinkedNotesPanel } from '../shared/LinkedNotesPanel';
 
 interface GeneralTasksViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
   onOpenQuickCapture: () => void;
   onOpenBusinessTaskKanban?: (task: BusinessTask) => void;
+  initialFocusTaskId?: string | null;
+  onClearInitialFocusTask?: () => void;
+  onOpenPersonalNote?: (noteId: string) => void;
 }
 
 type ViewMode = 'list' | 'week' | 'calendar';
@@ -43,10 +48,13 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
   data,
   onUpdateData,
   onOpenBusinessTaskKanban,
+  initialFocusTaskId,
+  onClearInitialFocusTask,
+  onOpenPersonalNote,
 }) => {
   // Navigation & View Mode
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [selectedBusinessFilter, setSelectedBusinessFilter] = useState<string>('all');
   const [selectedPillarFilter, setSelectedPillarFilter] = useState<string>('all');
@@ -202,6 +210,16 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
     setDetailSubtaskDraft('');
     setDetailRemindInInbox(Boolean(task.remindInInbox));
   };
+
+  // Auto-open personal task detail modal when navigated from a reminder toast
+  useEffect(() => {
+    if (!initialFocusTaskId) return;
+    const found = data.tasks.find((t) => t.id === initialFocusTaskId);
+    if (found) {
+      handleOpenTaskDetail(found);
+    }
+    onClearInitialFocusTask?.();
+  }, [initialFocusTaskId, data.tasks]);
 
   const handleAddDetailSubtask = () => {
     if (!detailSubtaskDraft.trim()) return;
@@ -445,16 +463,16 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Main Banner */}
-      <div className="rounded-3xl backdrop-blur-2xl bg-gradient-to-br from-white/85 via-sky-50/50 to-indigo-50/40 dark:from-slate-900/75 dark:via-sky-950/20 dark:to-indigo-950/25 border border-sky-200/70 dark:border-sky-500/20 p-6 shadow-lg dark:shadow-2xl">
+      <div className="rounded-3xl backdrop-blur-2xl bg-gradient-to-br from-white/85 via-orange-50/50 to-amber-50/40 dark:from-slate-900/75 dark:via-orange-950/20 dark:to-amber-950/25 border border-orange-200/70 dark:border-orange-500/20 p-6 shadow-lg dark:shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 via-orange-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/30 shrink-0">
               <CheckSquare className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Gestión de Tareas General</h1>
-                <span className="text-xs font-semibold text-sky-700 dark:text-sky-300 bg-gradient-to-r from-sky-500/15 to-indigo-500/15 px-2.5 py-0.5 rounded-xl border border-sky-500/30">
+                <span className="text-xs font-semibold text-orange-700 dark:text-orange-300 bg-gradient-to-r from-orange-500/15 to-amber-500/15 px-2.5 py-0.5 rounded-xl border border-orange-500/30">
                   Multi-Vista
                 </span>
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300 bg-slate-200/60 dark:bg-white/[0.08] px-2.5 py-0.5 rounded-xl border border-slate-300/60 dark:border-white/[0.08]">
@@ -474,7 +492,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'list'
-                    ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm font-bold'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -485,7 +503,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 onClick={() => setViewMode('week')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'week'
-                    ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm font-bold'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -496,7 +514,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 onClick={() => setViewMode('calendar')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-xl flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === 'calendar'
-                    ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-sm font-bold'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
@@ -510,7 +528,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 setDueDate(todayStr);
                 setShowAddForm(!showAddForm);
               }}
-              className="px-4 py-2.5 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/25 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              className="px-4 py-2.5 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 hover:from-orange-400 hover:via-orange-500 hover:to-amber-400 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/25 flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Nueva Tarea</span>
@@ -520,47 +538,43 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
       </div>
 
       {/* Temporal Status KPI Buttons */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <button
-          onClick={() => setTimeFilter('all')}
-          className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-            timeFilter === 'all'
-              ? 'bg-gradient-to-br from-sky-500/15 to-blue-600/10 border-sky-500/45 text-sky-800 dark:text-sky-300 shadow-sm'
-              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-sky-500/30'
-          }`}
-        >
-          <span className="text-xs font-semibold uppercase text-sky-600 dark:text-sky-400 block">Todas</span>
-          <span className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1 block tracking-tight">
-            {data.tasks.length}
-          </span>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Bandeja general</span>
-        </button>
-
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
         <button
           onClick={() => setTimeFilter('today')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`col-span-2 sm:col-span-1 p-3 sm:p-4 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 sm:block ${
             timeFilter === 'today'
-              ? 'bg-gradient-to-br from-blue-500/15 to-indigo-600/10 border-blue-500/45 text-blue-800 dark:text-blue-300 shadow-sm'
-              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-blue-500/30'
+              ? 'bg-gradient-to-br from-orange-500/15 to-amber-500/10 border-orange-500/45 text-orange-800 dark:text-orange-300 shadow-sm'
+              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-orange-500/30'
           }`}
         >
-          <span className="text-xs uppercase text-blue-600 dark:text-blue-400 font-bold block">Para Hoy</span>
-          <span className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1 block tracking-tight">
+          <div className="min-w-0">
+            <span className="text-xs uppercase text-orange-600 dark:text-orange-400 font-bold block">
+              Para Hoy
+            </span>
+            <span className="text-[11px] text-slate-400 dark:text-slate-500 block sm:hidden mt-0.5">
+              Compromisos del día
+            </span>
+          </div>
+          <span className="text-2xl font-extrabold text-orange-600 dark:text-orange-400 sm:mt-1 block tracking-tight tabular-nums shrink-0">
             {tasksForTodayCount}
           </span>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Compromisos del día</span>
+          <span className="hidden sm:block text-[11px] text-slate-400 dark:text-slate-500">
+            Compromisos del día
+          </span>
         </button>
 
         <button
           onClick={() => setTimeFilter('week')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 rounded-2xl border text-left transition-all cursor-pointer ${
             timeFilter === 'week'
-              ? 'bg-gradient-to-br from-indigo-500/15 to-violet-600/10 border-indigo-500/45 text-indigo-800 dark:text-indigo-300 shadow-sm'
-              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-indigo-500/30'
+              ? 'bg-gradient-to-br from-amber-500/15 to-yellow-500/10 border-amber-500/45 text-amber-800 dark:text-amber-300 shadow-sm'
+              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-amber-500/30'
           }`}
         >
-          <span className="text-xs uppercase text-indigo-600 dark:text-indigo-400 font-bold block">Esta Semana</span>
-          <span className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-1 block tracking-tight">
+          <span className="text-xs uppercase text-amber-600 dark:text-amber-400 font-bold block">
+            Esta Semana
+          </span>
+          <span className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1 block tracking-tight tabular-nums">
             {tasksThisWeekCount}
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">Ciclo operativo</span>
@@ -568,29 +582,50 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
 
         <button
           onClick={() => setTimeFilter('overdue')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 rounded-2xl border text-left transition-all cursor-pointer ${
             timeFilter === 'overdue'
-              ? 'bg-gradient-to-br from-rose-500/15 to-orange-500/10 border-rose-500/45 text-rose-800 dark:text-rose-300 shadow-sm'
+              ? 'bg-gradient-to-br from-rose-500/15 to-red-500/10 border-rose-500/45 text-rose-800 dark:text-rose-300 shadow-sm'
               : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-rose-500/30'
           }`}
         >
-          <span className="text-xs uppercase text-rose-600 dark:text-rose-400 font-bold block">Vencidas</span>
-          <span className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1 block tracking-tight">
+          <span className="text-xs uppercase text-rose-600 dark:text-rose-400 font-bold block">
+            Vencidas
+          </span>
+          <span className="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-1 block tracking-tight tabular-nums">
             {overdueTasksCount}
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">Requieren reprogramar</span>
         </button>
 
         <button
-          onClick={() => setTimeFilter('completed')}
-          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-            timeFilter === 'completed'
-              ? 'bg-gradient-to-br from-violet-500/15 to-fuchsia-500/10 border-violet-500/45 text-violet-800 dark:text-violet-300 shadow-sm'
-              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-violet-500/30'
+          onClick={() => setTimeFilter('all')}
+          className={`p-3 sm:p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            timeFilter === 'all'
+              ? 'bg-gradient-to-br from-slate-500/15 to-orange-500/10 border-orange-500/45 text-slate-900 dark:text-white shadow-sm'
+              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-orange-500/30'
           }`}
         >
-          <span className="text-xs uppercase text-violet-700 dark:text-violet-300 font-bold block">Completadas</span>
-          <span className="text-2xl font-extrabold text-violet-700 dark:text-violet-300 mt-1 block tracking-tight">
+          <span className="text-xs font-bold uppercase text-orange-600 dark:text-orange-400 block">
+            Todas
+          </span>
+          <span className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1 block tracking-tight tabular-nums">
+            {data.tasks.length}
+          </span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">Bandeja general</span>
+        </button>
+
+        <button
+          onClick={() => setTimeFilter('completed')}
+          className={`p-3 sm:p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+            timeFilter === 'completed'
+              ? 'bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border-emerald-500/45 text-emerald-800 dark:text-emerald-300 shadow-sm'
+              : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-emerald-500/30'
+          }`}
+        >
+          <span className="text-xs uppercase text-emerald-700 dark:text-emerald-300 font-bold block">
+            Completadas
+          </span>
+          <span className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1 block tracking-tight tabular-nums">
             {completedTasksCount}
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">Historial ejecutado</span>
@@ -609,7 +644,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             }}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
               scopeFilter === 'all'
-                ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white shadow-xs font-bold'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs font-bold'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -619,7 +654,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             onClick={() => setScopeFilter('personal')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
               scopeFilter === 'personal'
-                ? 'bg-gradient-to-r from-sky-500/25 to-blue-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/40 shadow-sm font-bold'
+                ? 'bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-700 dark:text-orange-300 border border-orange-500/40 shadow-sm font-bold'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
@@ -630,12 +665,12 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             onClick={() => setScopeFilter('business')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
               scopeFilter === 'business'
-                ? 'bg-gradient-to-r from-indigo-500/25 to-violet-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/40 shadow-sm font-bold'
+                ? 'bg-gradient-to-r from-rose-700/20 to-red-700/20 text-rose-800 dark:text-rose-300 border border-rose-600/40 shadow-sm font-bold'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Building2 className="w-3 h-3" />
-            <span>Vida Empresarial</span>
+            <span>Multi-Negocio</span>
           </button>
         </div>
 
@@ -683,7 +718,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
         <form onSubmit={handleCreateTask} className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.1] space-y-4 shadow-xl">
           <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/[0.08]">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Plus className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+              <Plus className="w-4 h-4 text-orange-600 dark:text-orange-400" />
               <span>Registrar Nueva Tarea (Personal o por Empresa)</span>
             </h3>
             <button
@@ -864,7 +899,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
 
             <div className="md:col-span-2 space-y-2 pt-2 border-t border-slate-200/70 dark:border-white/[0.06]">
               <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <ListChecks className="w-3.5 h-3.5 text-sky-500" />
+                <ListChecks className="w-3.5 h-3.5 text-orange-500" />
                 <span>Subtareas / Pasos ({newSubtasks.length})</span>
               </label>
               <div className="flex gap-2">
@@ -884,7 +919,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                 <button
                   type="button"
                   onClick={handleAddNewSubtask}
-                  className="px-3 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 text-xs font-bold cursor-pointer shrink-0"
+                  className="px-3 py-2 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-300 text-xs font-bold cursor-pointer shrink-0"
                 >
                   + Paso
                 </button>
@@ -921,7 +956,7 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:via-blue-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/25 cursor-pointer"
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-500 hover:from-orange-400 hover:via-orange-500 hover:to-amber-400 text-white font-bold text-xs rounded-xl shadow-md shadow-orange-500/25 cursor-pointer"
             >
               Guardar Tarea
             </button>
@@ -1071,6 +1106,34 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                             </span>
                           </>
                         )}
+
+                        {(() => {
+                          const linkedNotes = (data.personalNotes || []).filter((n) =>
+                            (n.linkedTaskIds || []).includes(task.id)
+                          );
+                          if (linkedNotes.length === 0) return null;
+                          return (
+                            <>
+                              <span>·</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (linkedNotes.length === 1 && onOpenPersonalNote) {
+                                    onOpenPersonalNote(linkedNotes[0].id);
+                                  } else {
+                                    handleOpenTaskDetail(task);
+                                  }
+                                }}
+                                className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold hover:underline cursor-pointer"
+                              >
+                                <NotebookPen className="w-3 h-3" />
+                                {linkedNotes.length}{' '}
+                                {linkedNotes.length === 1 ? 'nota' : 'notas'}
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1722,6 +1785,20 @@ export const GeneralTasksView: React.FC<GeneralTasksViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Linked Personal Notes for this Task */}
+              <LinkedNotesPanel
+                entityType="task"
+                entityId={detailTaskId}
+                entityLabel={detailTitle || 'Tarea'}
+                data={data}
+                onUpdateData={onUpdateData}
+                onOpenNote={(noteId) => {
+                  setDetailTaskId(null);
+                  onOpenPersonalNote?.(noteId);
+                }}
+                compact
+              />
 
               {/* Footer Actions */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-white/[0.06]">

@@ -2,6 +2,7 @@ export type PillarKey = 'espiritual' | 'emocional' | 'fisico' | 'intelectual' | 
 
 export interface UserProfile {
   name: string;
+  avatarDataUrl?: string;
   heightCm: number;
   weightKg: number;
   calculatedBmi: number;
@@ -117,6 +118,38 @@ export interface FitnessActivityLog {
 }
 
 // 4. Intelectual (Biblioteca de Sabiduría)
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+
+export interface BookBookmark {
+  page: number;
+  label?: string;
+  createdAt: string;
+}
+
+export interface BookHighlight {
+  id: string;
+  page: number;
+  /** Normalized coordinates (0..1) relative to page dimensions */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: HighlightColor;
+  quote?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface ReadingGoalState {
+  dailyTargetMinutes: number;
+  /** Total reading seconds accumulated per YYYY-MM-DD date */
+  dailySecondsByDate: Record<string, number>;
+  annualBooksTarget: number;
+  bestStreak: number;
+  /** ID of the Habit in data.habits automatically completed when dailyTargetMinutes is reached */
+  linkedHabitId?: string;
+}
+
 export interface BookItem {
   id: string;
   title: string;
@@ -126,9 +159,17 @@ export interface BookItem {
   status: 'to_read' | 'reading' | 'completed';
   category: string;
   coverEmoji?: string;
+  coverImageDataUrl?: string;
   notes: string[];
   quotes: { text: string; page?: string }[];
   takeaways: string[];
+  hasPdf?: boolean;
+  pdfFileName?: string;
+  pdfSizeBytes?: number;
+  bookmarks?: BookBookmark[];
+  highlights?: BookHighlight[];
+  lastReadAt?: string;
+  completedYear?: number;
 }
 
 export interface WisdomCapsule {
@@ -203,6 +244,7 @@ export interface PersonalFinances {
   bankAccounts: BankAccount[];
   creditAccounts: CreditAccount[];
   transactions: FinancialTransaction[];
+  expenseCategories?: string[];
 }
 
 // Hábitos y Metas
@@ -536,4 +578,104 @@ export interface PersonalExperiment {
   linkedDecisionIds?: string[];
   aiLastFeedback?: string;
 }
+
+// Notas Generales (Vida Personal — Notability studio + detección interactiva de fechas y finanzas)
+export type NotePaperStyle = 'blank' | 'lined' | 'dotted' | 'grid' | 'cornell';
+export type NotePaperTone = 'system' | 'paper_cream' | 'paper_night';
+export type NoteTitleSize = 'sm' | 'md' | 'lg' | 'xl';
+
+export interface NoteInkPoint {
+  x: number;
+  y: number;
+  p?: number; // Apple Pencil pressure (0..1)
+}
+
+export interface NoteInkStroke {
+  id: string;
+  tool: 'pen' | 'highlighter';
+  color: string;
+  width: number;
+  points: NoteInkPoint[];
+}
+
+export interface NoteShapeItem {
+  id: string;
+  kind: 'rect' | 'ellipse' | 'line' | 'arrow' | 'star';
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  width: number;
+}
+
+export type NoteFontFamily = 'sans' | 'serif' | 'handwriting' | 'geometric' | 'mono';
+export type NoteFontSize = 'sm' | 'md' | 'lg' | 'xl';
+export type NoteFloatingBoxKind = 'sticky' | 'rect';
+export type NoteFloatingBoxColor = 'amber' | 'blue' | 'purple' | 'rose' | 'emerald' | 'slate';
+
+export interface NoteFloatingBox {
+  id: string;
+  kind: NoteFloatingBoxKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: NoteFloatingBoxColor;
+  borderStyle?: 'solid' | 'dashed';
+  title?: string;
+  text: string;
+}
+
+export interface NoteEmbeddedImage {
+  id: string;
+  dataUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  caption?: string;
+}
+
+export type NotesStudioAction =
+  | { type: 'record' }
+  | { type: 'upload'; base64: string; mimeType: string; fileName: string };
+
+export interface NoteDecisionMeta {
+  context?: string;
+  decision?: string;
+  keyPoints?: string[];
+  expectedOutcome?: string;
+  quarter?: string;
+  transcript?: string;
+  source?: 'manual' | 'ai_audio' | 'notellm' | 'ai_topic';
+}
+
+export interface PersonalNote {
+  id: string;
+  title: string;
+  content: string;
+  category: 'planificacion_anual' | 'general' | 'ideas' | 'finanzas' | 'personal' | 'bitacora';
+  tags?: string[];
+  scopeTags?: ('personal' | 'business')[];
+  decisionMeta?: NoteDecisionMeta;
+  pinned?: boolean;
+  paperStyle?: NotePaperStyle;
+  paperTone?: NotePaperTone;
+  titleSize?: NoteTitleSize;
+  fontFamily?: NoteFontFamily;
+  fontSize?: NoteFontSize;
+  inkStrokes?: NoteInkStroke[];
+  shapes?: NoteShapeItem[];
+  floatingBoxes?: NoteFloatingBox[];
+  embeddedImages?: NoteEmbeddedImage[];
+  linkedBusinessIds?: string[];
+  linkedProjectIds?: string[];
+  linkedTaskIds?: string[];
+  linkedExperimentIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 

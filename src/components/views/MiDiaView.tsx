@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AppStoreData } from '../../services/storage';
 import { BusinessTask, NoteReminderItem } from '../../types';
 import { ORIGIN_MODULE_META, resolveReminderOrigin } from './SecondBrainView';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   Compass,
   Sun,
@@ -300,33 +301,34 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
     if (isRefreshingMindset) return;
     setIsRefreshingMindset(true);
     try {
-      const res = await fetch('/api/gemini/motivation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          moment: currentMoment,
-          tone: 'directo y exigente',
-          pillarSummary: {
-            profile: data.profile,
-            todayPriorities: data.superMorning.top3Priorities,
-            completedHabits: habitsDoneToday.length,
-          },
-        }),
-      });
-      if (res.ok) {
-        const result = await res.json();
-        if (result.message) {
-          setMindsetMessage(result.message);
-          setMindsetSource(
-            currentMoment === 'activacion'
-              ? 'Recordatorio Matutino · IA Coach'
-              : currentMoment === 'enfoque'
-              ? 'Pulso de Enfoque · IA Coach'
-              : 'Cierre Estoico · IA Coach'
-          );
-          setIsRefreshingMindset(false);
-          return;
-        }
+      const { ok, data: result } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/motivation',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            moment: currentMoment,
+            tone: 'directo y exigente',
+            pillarSummary: {
+              profile: data.profile,
+              todayPriorities: data.superMorning.top3Priorities,
+              completedHabits: habitsDoneToday.length,
+            },
+          }),
+        },
+        45000
+      );
+      if (ok && result.message) {
+        setMindsetMessage(result.message);
+        setMindsetSource(
+          currentMoment === 'activacion'
+            ? 'Recordatorio Matutino · IA Coach'
+            : currentMoment === 'enfoque'
+            ? 'Pulso de Enfoque · IA Coach'
+            : 'Cierre Estoico · IA Coach'
+        );
+        setIsRefreshingMindset(false);
+        return;
       }
       const nextIdx =
         (FALLBACK_MINDSET_QUOTES.indexOf(mindsetMessage) + 1) % FALLBACK_MINDSET_QUOTES.length;
@@ -376,7 +378,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
               className={`text-xs sm:text-sm font-semibold transition-colors truncate ${
                 isDone
                   ? 'line-through text-slate-400 dark:text-slate-500'
-                  : 'text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400'
+                  : 'text-slate-900 dark:text-white group-hover:text-sky-600 dark:group-hover:text-sky-400'
               }`}
             >
               {task.title}
@@ -385,8 +387,8 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
               <span
                 className={
                   task.scope === 'business'
-                    ? 'font-semibold text-blue-600 dark:text-blue-400'
-                    : 'font-semibold text-emerald-600 dark:text-emerald-400'
+                    ? 'font-semibold text-rose-700 dark:text-rose-400'
+                    : 'font-semibold text-orange-600 dark:text-orange-400'
                 }
               >
                 {task.scope === 'business'
@@ -430,7 +432,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           </div>
         </div>
 
-        <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-50 group-hover:opacity-100 group-hover:text-teal-500 shrink-0 transition-all" />
+        <ArrowUpRight className="w-4 h-4 text-slate-400 opacity-50 group-hover:opacity-100 group-hover:text-sky-500 shrink-0 transition-all" />
       </div>
     );
   };
@@ -449,14 +451,14 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
       <div className="p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-5">
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-teal-500 via-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/25 shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-sky-500 via-cyan-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 shrink-0">
               <Compass className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
             <div className="space-y-0.5 sm:space-y-1 min-w-0">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
                 <span>{formattedDate}</span>
                 <span aria-hidden="true">·</span>
-                <span className="tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold">
+                <span className="tabular-nums text-sky-700 dark:text-sky-400 font-semibold">
                   {executionScore}% ejecutado hoy
                 </span>
                 <span aria-hidden="true">·</span>
@@ -478,7 +480,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           <div className="grid grid-cols-3 gap-2 w-full lg:w-auto lg:flex lg:flex-wrap lg:items-center lg:gap-2.5 shrink-0">
             <button
               onClick={onOpenQuickCapture}
-              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-sky-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5 lg:w-4 lg:h-4 stroke-[2.5] shrink-0" />
               <span className="lg:hidden">Capturar</span>
@@ -486,7 +488,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </button>
             <button
               onClick={() => onNavigate('ai_assistant')}
-              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
+              className="px-2.5 py-2.5 lg:px-4 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white font-semibold text-[11px] lg:text-xs rounded-2xl shadow-md shadow-fuchsia-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 whitespace-nowrap"
             >
               <Bot className="w-3.5 h-3.5 lg:w-4 lg:h-4 shrink-0" />
               <span>Asistente IA</span>
@@ -495,7 +497,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
               onClick={() => onNavigate('mindset')}
               className="px-2.5 py-2.5 lg:px-4 bg-slate-100 dark:bg-white/[0.06] hover:bg-slate-200 dark:hover:bg-white/[0.12] border border-slate-200/80 dark:border-white/[0.08] text-slate-700 dark:text-slate-200 font-semibold text-[11px] lg:text-xs rounded-2xl flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap"
             >
-              <Sparkles className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+              <Sparkles className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 shrink-0" />
               <span>IA Coach</span>
             </button>
           </div>
@@ -504,7 +506,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
         {/* Minimal full-width progress track */}
         <div className="mt-3 sm:mt-5 h-1.5 w-full bg-slate-200/80 dark:bg-white/[0.06] rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-teal-500 via-emerald-500 to-green-400 rounded-full transition-all duration-500"
+            className="h-full bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 rounded-full transition-all duration-500"
             style={{ width: `${executionScore}%` }}
           />
         </div>
@@ -518,11 +520,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('tasks_general')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('tasks_general')}
-          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-teal-500/50 dark:hover:border-teal-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-orange-500/50 dark:hover:border-orange-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
         >
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-teal-500/20 shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white shadow-sm shadow-orange-500/20 shrink-0">
                 <CheckSquare className="w-4 h-4" />
               </div>
               <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
@@ -530,7 +532,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 <span className="hidden sm:inline">Tareas Pendientes</span>
               </span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-teal-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
+            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-orange-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
 
           <div>
@@ -551,7 +553,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </div>
           </div>
 
-          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-teal-600 dark:text-teal-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-orange-600 dark:text-orange-400">
             Completar o crear tarea
           </div>
         </div>
@@ -562,11 +564,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('habits_goals')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('habits_goals')}
-          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-rose-500/50 dark:hover:border-rose-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+          className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-red-500/50 dark:hover:border-red-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2.5 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
         >
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-rose-500 to-orange-500 flex items-center justify-center text-white shadow-sm shadow-rose-500/20 shrink-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-red-500 to-rose-600 flex items-center justify-center text-white shadow-sm shadow-red-500/20 shrink-0">
                 <Flame className="w-4 h-4" />
               </div>
               <span className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
@@ -574,7 +576,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 <span className="hidden sm:inline">Hábitos Cumplidos</span>
               </span>
             </div>
-            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-rose-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
+            <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-red-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
           </div>
 
           <div>
@@ -588,7 +590,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </p>
           </div>
 
-          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-rose-600 dark:text-rose-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-red-600 dark:text-red-400">
             Marcar hábitos y metas
           </div>
         </div>
@@ -655,11 +657,11 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
           tabIndex={0}
           onClick={() => onNavigate('physical_trainer')}
           onKeyDown={(e) => e.key === 'Enter' && onNavigate('physical_trainer')}
-          className="col-span-2 sm:col-span-1 lg:col-span-1 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-lime-500/50 dark:hover:border-lime-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500"
+          className="col-span-2 sm:col-span-1 lg:col-span-1 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] hover:border-cyan-500/50 dark:hover:border-cyan-400/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between gap-2 sm:gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-lime-500 to-emerald-500 flex items-center justify-center text-white shadow-sm shadow-lime-500/20">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-500 flex items-center justify-center text-white shadow-sm shadow-cyan-500/20">
                 <Dumbbell className="w-4 h-4" />
               </div>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
@@ -693,7 +695,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             </p>
           </div>
 
-          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-lime-700 dark:text-lime-400">
+          <div className="hidden sm:block pt-2 border-t border-slate-200/70 dark:border-white/[0.06] text-xs font-semibold text-cyan-700 dark:text-cyan-400">
             Entreno y sueño ({data.nutritionLog.sleepHours}h)
           </div>
         </div>
@@ -792,7 +794,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                     onClick={() => setAgendaFilter('business')}
                     className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
                       agendaFilter === 'business'
-                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                        ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-400 shadow-sm'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -803,7 +805,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                     onClick={() => setAgendaFilter('personal')}
                     className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
                       agendaFilter === 'personal'
-                        ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                        ? 'bg-white dark:bg-slate-800 text-orange-600 dark:text-orange-400 shadow-sm'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -814,7 +816,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onNavigate('tasks_general')}
-                  className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                  className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
                 >
                   <span>Gestionar</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -826,7 +828,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             {showBusinessGroup && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5" />
                     Empresariales de Hoy ({todayBusinessTasks.filter((t) => t.status !== 'done').length} pendientes)
                   </h3>
@@ -847,7 +849,7 @@ export const MiDiaView: React.FC<MiDiaViewProps> = ({
             {showPersonalGroup && (
               <div className="space-y-2 pt-2 border-t border-slate-200/70 dark:border-white/[0.06]">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5" />
                     Personales de Hoy ({todayPersonalTasks.filter((t) => t.status !== 'done').length} pendientes)
                   </h3>

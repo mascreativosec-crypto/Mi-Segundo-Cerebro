@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppStoreData } from '../../services/storage';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   Sparkles,
   Sun,
@@ -40,30 +41,42 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
   ]);
   const [isConsulting, setIsConsulting] = useState(false);
 
+  const [motivationError, setMotivationError] = useState<string | null>(null);
+
   const fetchMomentMotivation = async (moment: 'activacion' | 'enfoque' | 'reflexion') => {
     setSelectedMoment(moment);
     setIsLoadingMessage(true);
+    setMotivationError(null);
 
     try {
-      const res = await fetch('/api/gemini/motivation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          moment,
-          tone: selectedTone,
-          pillarSummary: {
-            profile: data.profile,
-            todayPriorities: data.superMorning.top3Priorities,
-            completedHabits: data.habits.filter((h) => h.completedDates.includes(new Date().toISOString().split('T')[0])).length,
-          },
-        }),
-      });
-      const result = await res.json();
+      const { ok, status, data: result } = await fetchJsonWithTimeout<{ message?: string; error?: string }>(
+        '/api/gemini/motivation',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            moment,
+            tone: selectedTone,
+            pillarSummary: {
+              profile: data.profile,
+              todayPriorities: data.superMorning.top3Priorities,
+              completedHabits: data.habits.filter((h) => h.completedDates.includes(new Date().toISOString().split('T')[0])).length,
+            },
+          }),
+        }
+      );
+      if (!ok) {
+        throw new Error(result.error || `Error del servidor (${status}) al generar el mensaje.`);
+      }
       if (result.message) {
         setActiveMessage(result.message);
+      } else {
+        throw new Error('No se recibió mensaje desde el servidor de IA.');
       }
-    } catch (err) {
-      console.error('Error fetching motivation message:', err);
+    } catch (err: unknown) {
+      setMotivationError(
+        err instanceof Error ? err.message : 'No se pudo conectar con el servidor de IA.'
+      );
     } finally {
       setIsLoadingMessage(false);
     }
@@ -79,32 +92,36 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
     setIsConsulting(true);
 
     try {
-      const res = await fetch('/api/gemini/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userText,
-          tone: selectedTone,
-          context: {
-            profile: data.profile,
-            activeBusinesses: data.businesses.map((b) => ({ name: b.name, revenue: b.actualRevenue, target: b.revenueTarget })),
-            todayPriorities: data.superMorning.top3Priorities,
-            tasksSummary: `${data.tasks.filter((t) => t.status === 'done').length} completadas de ${data.tasks.length} totales`,
-            habitsSummary: `${data.habits.filter((h) => h.completedDates.includes(new Date().toISOString().split('T')[0])).length} de ${data.habits.length}`,
-            pillarScores: data.pillarScores.map((p) => `${p.label}: ${p.score}%`),
-          },
-        }),
-      });
-      const result = await res.json();
-      if (result.response) {
-        setChatHistory((prev) => [...prev, { sender: 'assistant', text: result.response }]);
+      const { ok, status, data: result } = await fetchJsonWithTimeout<{ response?: string; error?: string }>(
+        '/api/gemini/advisor',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userText,
+            tone: selectedTone,
+            context: {
+              profile: data.profile,
+              activeBusinesses: data.businesses.map((b) => ({ name: b.name, revenue: b.actualRevenue, target: b.revenueTarget })),
+              todayPriorities: data.superMorning.top3Priorities,
+              tasksSummary: `${data.tasks.filter((t) => t.status === 'done').length} completadas de ${data.tasks.length} totales`,
+              habitsSummary: `${data.habits.filter((h) => h.completedDates.includes(new Date().toISOString().split('T')[0])).length} de ${data.habits.length}`,
+              pillarScores: data.pillarScores.map((p) => `${p.label}: ${p.score}%`),
+            },
+          }),
+        }
+      );
+      if (!ok) {
+        throw new Error(result.error || `Error del servidor (${status}) al consultar el consejero IA.`);
       }
-    } catch (err) {
-      console.error('Error in advisor consultation:', err);
-      setChatHistory((prev) => [
-        ...prev,
-        { sender: 'assistant', text: 'Error temporal al conectar con el asistente de IA. Revisa tu conexión o clave API.' }
-      ]);
+      if (result.response) {
+        setChatHistory((prev) => [...prev, { sender: 'assistant', text: result.response! }]);
+      } else {
+        throw new Error('La IA no devolvió respuesta. Verifica tu servidor Node.js y clave GEMINI_API_KEY.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error temporal al conectar con el asistente de IA.';
+      setChatHistory((prev) => [...prev, { sender: 'assistant', text: msg }]);
     } finally {
       setIsConsulting(false);
     }
@@ -194,6 +211,12 @@ export const MindsetCoachView: React.FC<MindsetCoachViewProps> = ({
             <span>Regenerar con IA</span>
           </button>
         </div>
+
+        {motivationError && (
+          <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            {motivationError}
+          </div>
+        )}
 
         {/* Dynamic Capsule Card */}
         <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 via-white/80 to-blue-500/5 dark:from-sky-950/20 dark:via-slate-900/60 dark:to-blue-950/20 border border-sky-500/25 relative overflow-hidden">

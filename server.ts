@@ -1,65 +1,659 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import http from 'http';
-import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
+import fs from 'fs';
+import crypto from 'crypto';
+import { GoogleGenAI, Type, FunctionDeclaration, ThinkingLevel } from '@google/genai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load .env from both current working directory and server file directory (supports Hostinger / Passenger / VPS)
+dotenv.config();
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const app = express();
-// Port 3000 is required by the environment; 8080 is reserved for Nginx reverse proxy
-const PORT = process.env.PORT && process.env.PORT !== '8080' ? parseInt(process.env.PORT, 10) : 3000;
+const IS_PROD = process.env.NODE_ENV === 'production';
 
-app.use(express.json({ limit: '25mb' }));
+// Parse optional CLI flags (e.g., `tsx server.ts --port 3000 --host 0.0.0.0`)
+function getCliArg(names: string[]): string | undefined {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    for (const name of names) {
+      if (arg === name && argv[i + 1]) return argv[i + 1];
+      if (arg.startsWith(`${name}=`)) return arg.slice(name.length + 1);
+    }
+  }
+  return undefined;
+}
 
-// Server-side Gemini client
-const apiKey = process.env.GEMINI_API_KEY || '';
-const ai = apiKey
-  ? new GoogleGenAI({
-      apiKey: apiKey,
+const cliPortRaw = getCliArg(['--port', '-p']);
+const cliPort = cliPortRaw ? parseInt(cliPortRaw, 10) : NaN;
+const HOST = getCliArg(['--host', '-H']) || '0.0.0.0';
+
+// Priority: explicit --port flag > PORT env (avoiding 8080 Nginx proxy port in AI Studio dev) > 3000
+const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : NaN;
+const PORT =
+  Number.isFinite(cliPort) && cliPort > 0
+    ? cliPort
+    : !IS_PROD && envPort === 8080
+    ? 3000
+    : Number.isFinite(envPort) && envPort > 0
+    ? envPort
+    : 3000;
+
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '45mb' }));
+
+// Configurable Gemini models, fallback chain & timeout
+const TEXT_MODEL = (process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite').trim();
+const FALLBACK_MODELS = (process.env.GEMINI_FALLBACK_MODELS || 'gemini-4-hydrogen')
+  .split(',')
+  .map((m) => m.trim())
+  .filter((m) => m && m !== TEXT_MODEL);
+const MODEL_CHAIN = Array.from(new Set([TEXT_MODEL, ...FALLBACK_MODELS]));
+const TRANSCRIBE_MODEL = (process.env.GEMINI_TRANSCRIBE_MODEL || 'gemini-3.5-transcribe').trim();
+const GEMINI_TIMEOUT_MS = Math.max(
+  5000,
+  Math.min(120000, parseInt(process.env.GEMINI_TIMEOUT_MS || '25000', 10) || 25000)
+);
+
+// Optional persistent disk storage outside ephemeral Hostinger hbuilds/versions/<id>/ directory.
+// Disabled by default (only enabled when ENABLE_DISK_STORAGE=true or DATA_DIR is explicitly configured).
+function resolvePersistentPaths(): { enabled: boolean; dataDir: string; backupDir: string } {
+  const explicitlyEnabled =
+    process.env.ENABLE_DISK_STORAGE === 'true' || Boolean((process.env.DATA_DIR || '').trim());
+  if (!explicitlyEnabled) {
+    return { enabled: false, dataDir: '', backupDir: '' };
+  }
+
+  let baseRoot: string;
+  if ((process.env.DATA_DIR || '').trim()) {
+    baseRoot = path.resolve(process.env.DATA_DIR!.trim());
+    return {
+      enabled: true,
+      dataDir: baseRoot,
+      backupDir: path.join(path.dirname(baseRoot), 'respaldos'),
+    };
+  }
+
+  // Auto-detect Hostinger hbuilds path (e.g. /home/uXXXX/domains/site.com/hbuilds/versions/123)
+  const normalizedDir = __dirname.replace(/\\/g, '/');
+  const hbuildsIdx = normalizedDir.indexOf('/hbuilds/');
+  if (hbuildsIdx > 0) {
+    baseRoot = normalizedDir.slice(0, hbuildsIdx);
+  } else {
+    baseRoot = path.resolve(__dirname, '..');
+  }
+
+  return {
+    enabled: true,
+    dataDir: path.join(baseRoot, 'datos'),
+    backupDir: path.join(baseRoot, 'respaldos'),
+  };
+}
+
+const STORAGE_PATHS = resolvePersistentPaths();
+
+function initPersistentStorageIfEnabled() {
+  if (!STORAGE_PATHS.enabled) return;
+  try {
+    fs.mkdirSync(STORAGE_PATHS.dataDir, { recursive: true });
+    fs.mkdirSync(STORAGE_PATHS.backupDir, { recursive: true });
+    const stateFile = path.join(STORAGE_PATHS.dataDir, 'estado.json');
+    if (fs.existsSync(stateFile)) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupFile = path.join(STORAGE_PATHS.backupDir, `startup-backup-${stamp}.json`);
+      fs.copyFileSync(stateFile, backupFile);
+    }
+  } catch (err) {
+    console.warn('No se pudo inicializar almacenamiento persistente en disco:', err);
+  }
+}
+
+initPersistentStorageIfEnabled();
+
+// ============================================================
+// Server-Side Authentication (scrypt hashing + session tokens)
+// ============================================================
+interface StoredCredential {
+  username: string;
+  displayName?: string;
+  salt: string;
+  hash: string;
+  createdAt: string;
+}
+
+interface SessionRecord {
+  username: string;
+  displayName?: string;
+  expiresAt: number;
+}
+
+const SESSION_COOKIE_NAME = 'msc_session';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+const SESSION_SIGNING_SECRET =
+  (process.env.SESSION_SECRET || '').trim() || crypto.randomBytes(32).toString('hex');
+
+const activeSessions = new Map<string, SessionRecord>();
+let claimedCredential: StoredCredential | null = null;
+
+function hashPasswordScrypt(password: string, salt: string): string {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+
+function timingSafeCompareStr(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function getEnvCredentials(): { username: string; password: string } | null {
+  const username = (process.env.APP_LOGIN_USER || '').trim();
+  const password = (process.env.APP_LOGIN_PASSWORD || '').trim();
+  if (!username || !password) return null;
+  return { username, password };
+}
+
+function getAuthStorePath(): string | null {
+  if (!STORAGE_PATHS.enabled || !STORAGE_PATHS.dataDir) return null;
+  const resolved = path.resolve(STORAGE_PATHS.dataDir, 'auth-credentials.json');
+  const baseWithSep = path.resolve(STORAGE_PATHS.dataDir) + path.sep;
+  if (!resolved.startsWith(baseWithSep)) return null;
+  return resolved;
+}
+
+function loadClaimedCredentialFromDisk() {
+  const filePath = getAuthStorePath();
+  if (!filePath || !fs.existsSync(filePath)) return;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (
+      parsed &&
+      typeof parsed.username === 'string' &&
+      typeof parsed.salt === 'string' &&
+      typeof parsed.hash === 'string'
+    ) {
+      claimedCredential = parsed as StoredCredential;
+    }
+  } catch (err) {
+    console.warn('No se pudieron cargar credenciales guardadas en disco:', err);
+  }
+}
+
+function saveClaimedCredentialToDisk(cred: StoredCredential) {
+  const filePath = getAuthStorePath();
+  if (!filePath) return;
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(cred, null, 2), { mode: 0o600 });
+  } catch (err) {
+    console.warn('No se pudieron guardar credenciales en disco:', err);
+  }
+}
+
+loadClaimedCredentialFromDisk();
+
+function isAuthConfigured(): boolean {
+  return Boolean(getEnvCredentials() || claimedCredential);
+}
+
+function signSessionId(sessionId: string): string {
+  const sig = crypto.createHmac('sha256', SESSION_SIGNING_SECRET).update(sessionId).digest('hex');
+  return `${sessionId}.${sig}`;
+}
+
+function verifySignedToken(token: string | undefined): SessionRecord | null {
+  if (!token || typeof token !== 'string') return null;
+  const dotIdx = token.indexOf('.');
+  if (dotIdx <= 0) return null;
+  const sessionId = token.slice(0, dotIdx);
+  const sig = token.slice(dotIdx + 1);
+  const expectedSig = crypto
+    .createHmac('sha256', SESSION_SIGNING_SECRET)
+    .update(sessionId)
+    .digest('hex');
+  if (!timingSafeCompareStr(sig, expectedSig)) return null;
+  const rec = activeSessions.get(sessionId);
+  if (!rec) return null;
+  if (Date.now() > rec.expiresAt) {
+    activeSessions.delete(sessionId);
+    return null;
+  }
+  return rec;
+}
+
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!cookieHeader) return out;
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const key = part.slice(0, idx).trim();
+    const val = part.slice(idx + 1).trim();
+    if (key) out[key] = decodeURIComponent(val);
+  }
+  return out;
+}
+
+function extractRequestToken(req: Request): { token?: string; viaCookie: boolean } {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.slice(7).trim();
+    if (bearer) return { token: bearer, viaCookie: false };
+  }
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies[SESSION_COOKIE_NAME]) {
+    return { token: cookies[SESSION_COOKIE_NAME], viaCookie: true };
+  }
+  return { token: undefined, viaCookie: false };
+}
+
+function isRequestHttps(req: Request): boolean {
+  const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  return req.secure || proto.includes('https');
+}
+
+function buildSessionCookie(token: string, req: Request, maxAgeSec: number): string {
+  const secure = isRequestHttps(req);
+  const attrs = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    `Max-Age=${maxAgeSec}`,
+  ];
+  if (secure) {
+    attrs.push('Secure', 'SameSite=None', 'Partitioned');
+  } else {
+    attrs.push('SameSite=Lax');
+  }
+  return attrs.join('; ');
+}
+
+function issueSession(res: Response, req: Request, username: string, displayName?: string): string {
+  const sessionId = crypto.randomBytes(24).toString('hex');
+  activeSessions.set(sessionId, {
+    username,
+    displayName: displayName || username,
+    expiresAt: Date.now() + SESSION_TTL_MS,
+  });
+  const signedToken = signSessionId(sessionId);
+  res.setHeader(
+    'Set-Cookie',
+    buildSessionCookie(signedToken, req, Math.floor(SESSION_TTL_MS / 1000))
+  );
+  return signedToken;
+}
+
+function verifyCsrfForCookieMutation(req: Request): boolean {
+  const method = req.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true;
+  if (req.headers['x-requested-with']) return true;
+  const origin = req.headers.origin;
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').toLowerCase();
+  if (!origin || !host) return false;
+  try {
+    return new URL(origin).host.toLowerCase() === host;
+  } catch {
+    return false;
+  }
+}
+
+function requireAuthenticatedSession(req: Request, res: Response, next: NextFunction) {
+  const { token, viaCookie } = extractRequestToken(req);
+  const session = verifySignedToken(token);
+  if (!session) {
+    return res.status(401).json({
+      error: 'Sesión requerida. Inicia sesión con tu usuario y contraseña.',
+    });
+  }
+  if (viaCookie && !verifyCsrfForCookieMutation(req)) {
+    return res.status(403).json({
+      error: 'Origen no autorizado para esta operación.',
+    });
+  }
+  return next();
+}
+
+app.get('/api/auth/status', (req: Request, res: Response) => {
+  const envCreds = getEnvCredentials();
+  const { token } = extractRequestToken(req);
+  const session = verifySignedToken(token);
+  return res.json({
+    configured: isAuthConfigured(),
+    authenticated: Boolean(session),
+    username: session?.username || null,
+    displayName: session?.displayName || claimedCredential?.displayName || session?.username || null,
+    managedByEnv: Boolean(envCreds),
+  });
+});
+
+app.post('/api/auth/setup', (req: Request, res: Response) => {
+  if (isAuthConfigured()) {
+    return res.status(409).json({
+      error: 'El acceso ya fue configurado. Inicia sesión con tu usuario y contraseña.',
+    });
+  }
+  const username = String(req.body?.username || '').trim();
+  const rawDisplayName = String(req.body?.displayName || '').trim();
+  const displayName = (rawDisplayName || username).slice(0, 80);
+  const password = String(req.body?.password || '');
+
+  if (username.length < 3 || username.length > 64) {
+    return res.status(400).json({ error: 'El usuario debe tener entre 3 y 64 caracteres.' });
+  }
+  if (password.length < 6 || password.length > 128) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+  }
+
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = hashPasswordScrypt(password, salt);
+  claimedCredential = {
+    username,
+    displayName,
+    salt,
+    hash,
+    createdAt: new Date().toISOString(),
+  };
+  saveClaimedCredentialToDisk(claimedCredential);
+
+  const token = issueSession(res, req, username, displayName);
+  return res.status(201).json({
+    authenticated: true,
+    username,
+    displayName,
+    token,
+  });
+});
+
+app.post('/api/auth/login', (req: Request, res: Response) => {
+  const username = String(req.body?.username || '').trim();
+  const password = String(req.body?.password || '');
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Ingresa tu usuario y contraseña.' });
+  }
+
+  const envCreds = getEnvCredentials();
+  if (envCreds) {
+    const userOk = timingSafeCompareStr(username.toLowerCase(), envCreds.username.toLowerCase());
+    const passOk = timingSafeCompareStr(password, envCreds.password);
+    if (!userOk || !passOk) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+    }
+    const envDisplayName = (process.env.APP_LOGIN_NAME || '').trim() || envCreds.username;
+    const token = issueSession(res, req, envCreds.username, envDisplayName);
+    return res.json({
+      authenticated: true,
+      username: envCreds.username,
+      displayName: envDisplayName,
+      token,
+    });
+  }
+
+  if (!claimedCredential) {
+    return res.status(409).json({
+      error: 'Aún no has creado tus credenciales iniciales. Configura tu usuario y contraseña primero.',
+    });
+  }
+
+  const userOk = timingSafeCompareStr(username.toLowerCase(), claimedCredential.username.toLowerCase());
+  const computedHash = hashPasswordScrypt(password, claimedCredential.salt);
+  const passOk = timingSafeCompareStr(computedHash, claimedCredential.hash);
+
+  if (!userOk || !passOk) {
+    return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
+  }
+
+  const resolvedDisplayName = claimedCredential.displayName || claimedCredential.username;
+  const token = issueSession(res, req, claimedCredential.username, resolvedDisplayName);
+  return res.json({
+    authenticated: true,
+    username: claimedCredential.username,
+    displayName: resolvedDisplayName,
+    token,
+  });
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  const { token } = extractRequestToken(req);
+  if (token) {
+    const dotIdx = token.indexOf('.');
+    if (dotIdx > 0) {
+      activeSessions.delete(token.slice(0, dotIdx));
+    }
+  }
+  res.setHeader('Set-Cookie', buildSessionCookie('', req, 0));
+  return res.json({ authenticated: false });
+});
+
+// Protect AI & internal data API routes behind verified session
+app.use('/api/gemini', requireAuthenticatedSession);
+app.use('/api/emotions', requireAuthenticatedSession);
+
+function getApiKey(): string {
+  const raw = (process.env.GEMINI_API_KEY || '').trim().replace(/^["']|["']$/g, '');
+  if (!raw || raw === 'MY_GEMINI_API_KEY') return '';
+  return raw;
+}
+
+let cachedKey = '';
+let cachedClient: GoogleGenAI | null = null;
+
+function getAiClient(): GoogleGenAI | null {
+  const key = getApiKey();
+  if (!key) return null;
+  if (!cachedClient || cachedKey !== key) {
+    cachedKey = key;
+    cachedClient = new GoogleGenAI({
+      apiKey: key,
       httpOptions: {
+        timeout: GEMINI_TIMEOUT_MS,
         headers: {
           'User-Agent': 'aistudio-build',
         },
       },
-    })
-  : null;
+    });
+  }
+  return cachedClient;
+}
 
-// Helper to transcribe audio buffer (base64) with gemini-3.5-transcribe
-async function transcribeAudioBase64(base64Data: string, mimeType: string): Promise<string> {
-  if (!ai || !apiKey) return '';
-  const response = await ai.models.generateContent({
-    model: 'gemini-3.5-transcribe',
-    contents: [
-      {
-        inlineData: {
-          mimeType: mimeType || 'audio/webm',
-          data: base64Data,
-        },
-      },
-      {
-        text: 'Transcribe con máxima fidelidad en español todo lo que se dice en este audio. Devuelve únicamente la transcripción limpia.',
-      },
-    ],
+function parseJsonSafe<T = Record<string, any>>(rawText?: string | null): T {
+  const cleaned = (rawText || '{}')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  return JSON.parse(cleaned || '{}') as T;
+}
+
+function getThinkingConfigForModel(model: string) {
+  return model.startsWith('gemini-4-')
+    ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+    : {};
+}
+
+function isRetryableModelError(error: any): boolean {
+  const status = Number(error?.status || error?.statusCode) || 0;
+  const msg = String(error?.message || '');
+  return (
+    status === 404 ||
+    status === 429 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
+    /TIMEOUT|ETIMEDOUT|ECONNRESET|high demand|UNAVAILABLE|RESOURCE_EXHAUSTED|NOT_FOUND|AbortError/i.test(msg)
+  );
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const err: any = new Error(`Timeout tras ${Math.round(ms / 1000)}s esperando respuesta de ${label}.`);
+      err.status = 504;
+      reject(err);
+    }, ms);
   });
-  return response.text || '';
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function generateWithFallback(
+  client: GoogleGenAI,
+  request: {
+    contents: any;
+    config?: Record<string, any>;
+  }
+) {
+  let lastError: any = null;
+  for (let i = 0; i < MODEL_CHAIN.length; i++) {
+    const model = MODEL_CHAIN[i];
+    try {
+      const mergedConfig = {
+        ...(request.config || {}),
+        ...getThinkingConfigForModel(model),
+      };
+      const response = await withTimeout(
+        client.models.generateContent({
+          model,
+          contents: request.contents,
+          config: mergedConfig,
+        }),
+        GEMINI_TIMEOUT_MS,
+        model
+      );
+      return { response, usedModel: model };
+    } catch (err: any) {
+      lastError = err;
+      const hasNext = i < MODEL_CHAIN.length - 1;
+      if (hasNext && isRetryableModelError(err)) {
+        console.warn(`[Gemini] Modelo ${model} falló (${err?.status || err?.message}). Intentando respaldo: ${MODEL_CHAIN[i + 1]}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError || new Error('No se pudo obtener respuesta de ningún modelo de Gemini.');
+}
+
+function sendGeminiError(res: Response, routeName: string, error: any) {
+  console.error(`Error in ${routeName}:`, error);
+  const status = Number(error?.status || error?.statusCode) || 500;
+  const rawMsg = String(error?.message || 'Error procesando solicitud con Gemini IA');
+  let friendly = rawMsg;
+  if (status === 504 || /Timeout/i.test(rawMsg)) {
+    friendly = `El proveedor de IA tardó demasiado en responder (${Math.round(GEMINI_TIMEOUT_MS / 1000)}s). Intenta de nuevo en unos segundos o configura un modelo más rápido en GEMINI_MODEL.`;
+  } else if (status === 400 && /API_KEY_INVALID|API key not valid/i.test(rawMsg)) {
+    friendly = 'La clave GEMINI_API_KEY configurada en el servidor no es válida. Verifica la clave en las variables de entorno del servidor.';
+  } else if (status === 403 || /PERMISSION_DENIED/i.test(rawMsg)) {
+    friendly = 'Permiso denegado por la API de Gemini (403). Verifica que tu clave GEMINI_API_KEY tenga permisos activos.';
+  } else if (status === 404 || /NOT_FOUND/i.test(rawMsg)) {
+    friendly = `Modelo de Gemini no disponible (${MODEL_CHAIN.join(', ')}). Ajusta GEMINI_MODEL / GEMINI_FALLBACK_MODELS en tu archivo .env.`;
+  } else if (status === 429 || /RESOURCE_EXHAUSTED/i.test(rawMsg)) {
+    friendly = 'Límite de cuota de la API de Gemini alcanzado (429). Espera unos segundos o verifica la facturación de tu clave API.';
+  } else if (status === 503 || /UNAVAILABLE|high demand/i.test(rawMsg)) {
+    friendly = 'El modelo de Gemini está temporalmente saturado (503). Intenta nuevamente en unos segundos.';
+  }
+  return res.status(status >= 400 && status < 600 ? status : 500).json({ error: friendly, details: rawMsg });
+}
+
+function requireAiClient(res: Response): GoogleGenAI | null {
+  const client = getAiClient();
+  if (!client) {
+    res.status(503).json({
+      error:
+        'GEMINI_API_KEY no está configurada en el servidor Node.js. Configura la variable de entorno GEMINI_API_KEY y reinicia el servidor.',
+    });
+    return null;
+  }
+  return client;
+}
+
+function normalizeAudioMimeType(rawMime?: string): string {
+  const base = String(rawMime || 'audio/webm')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+
+  if (!base || base === 'application/octet-stream') return 'audio/mpeg';
+  if (base === 'audio/x-m4a' || base === 'audio/m4a' || base === 'audio/mp4a-latm') return 'audio/mp4';
+  if (base === 'audio/x-wav' || base === 'audio/wave') return 'audio/wav';
+  if (base === 'audio/mp3' || base === 'audio/x-mpeg-3' || base === 'audio/mpeg3') return 'audio/mpeg';
+  if (base === 'video/webm') return 'audio/webm';
+  if (base === 'video/mp4') return 'audio/mp4';
+  return base;
+}
+
+// Helper to transcribe audio buffer (base64) with normalized MIME type, timeout & full fallback chain
+async function transcribeAudioBase64(client: GoogleGenAI, base64Data: string, mimeType: string): Promise<string> {
+  const cleanMime = normalizeAudioMimeType(mimeType);
+  const cleanBase64 = String(base64Data || '').replace(/^data:[^;]+;base64,/, '').trim();
+  if (!cleanBase64) {
+    throw new Error('El archivo de audio está vacío.');
+  }
+
+  const transcribeChain = Array.from(
+    new Set([TRANSCRIBE_MODEL, 'gemini-4-hydrogen', ...MODEL_CHAIN])
+  );
+  let lastError: any = null;
+
+  for (let i = 0; i < transcribeChain.length; i++) {
+    const model = transcribeChain[i];
+    try {
+      const response = await withTimeout(
+        client.models.generateContent({
+          model,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: cleanMime,
+                  data: cleanBase64,
+                },
+              },
+              {
+                text: 'Transcribe con máxima fidelidad en español todo lo que se dice en este audio. Devuelve únicamente la transcripción limpia y clara.',
+              },
+            ],
+          },
+          config: getThinkingConfigForModel(model),
+        }),
+        Math.max(GEMINI_TIMEOUT_MS, 55000),
+        model
+      );
+      const text = (response.text || '').trim();
+      if (text) return text;
+      lastError = new Error(`El modelo ${model} devolvió una transcripción vacía.`);
+    } catch (err: any) {
+      lastError = err;
+      const status = Number(err?.status || err?.statusCode) || 0;
+      const hasNext = i < transcribeChain.length - 1;
+      if (hasNext && (isRetryableModelError(err) || status === 400)) {
+        console.warn(`[Gemini Audio] ${model} falló (${err?.status || err?.message}), probando ${transcribeChain[i + 1]}`);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError || new Error('No se pudo transcribir el audio.');
 }
 
 // Strategic AI Advisor Endpoint
 app.post('/api/gemini/advisor', async (req: Request, res: Response) => {
   try {
-    const { prompt, context, pillarData, tone = 'directo' } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
 
-    if (!ai || !apiKey) {
-      return res.json({
-        response: `Diagnóstico Estratégico:\n1. Enfócate en el 20% de acciones que generan el 80% del impacto hoy.\n2. Revisa tu área más baja y desbloquéala con un bloque de trabajo profundo de 45 min.\n3. Protege tu hidratación y descanso para sostener el ritmo ejecutivo.`,
-        mode: 'offline_mode',
-      });
-    }
+    const { prompt, context, pillarData, tone = 'directo' } = req.body || {};
 
     const systemInstruction = `Eres el Asistente Estratégico Ejecutivo de "MI SEGUNDO CEREBRO 4.0".
 Tu propósito es asesorar al usuario en su crecimiento integral: ESPIRITUAL + EMOCIONAL + FÍSICO + INTELECTUAL + FINANCIERO = MEJOR VERSIÓN.
@@ -76,39 +670,29 @@ REGLAS CRÍTICAS:
 - Responde en español, de forma concisa, con viñetas claras y accionables.`;
 
     const mergedContext = context || (pillarData ? { pillarData } : {});
-    const userMessage = `Contexto del usuario actual:\n${JSON.stringify(mergedContext, null, 2)}\n\nPregunta / Situación:\n${prompt}`;
+    const userMessage = `Contexto del usuario actual:\n${JSON.stringify(mergedContext, null, 2)}\n\nPregunta / Situación:\n${prompt || 'Analiza mi estado actual.'}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: userMessage,
-      config: {
-        systemInstruction,
-      },
+      config: { systemInstruction },
     });
 
-    return res.json({ response: response.text });
+    return res.json({ response: response.text || 'Sin respuesta generada.', model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/advisor:', error);
-    return res.status(500).json({ error: error.message || 'Error processing AI advisor request' });
+    return sendGeminiError(res, '/api/gemini/advisor', error);
   }
 });
 
 // Daily Motivation & Mindset Endpoint
 app.post('/api/gemini/motivation', async (req: Request, res: Response) => {
   try {
-    const { moment = 'activacion', pillarSummary, tone = 'directo' } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
 
-    if (!ai || !apiKey) {
-      const fallbacks: Record<string, string> = {
-        activacion: 'Hoy no negocias con tu mente. Tus 3 prioridades mandan. Pon el cuerpo en movimiento, agradece la oportunidad de existir y domina el día.',
-        enfoque: 'Pausa táctica: ¿Estás ocupado o estás siendo productivo? Elimina la distracción y termina lo que empezaste.',
-        reflexion: 'Cierre de jornada: evalúa tus victorias con humildad y tus errores con objetividad. Mañana comienza hoy.',
-      };
-      return res.json({ message: fallbacks[moment] || fallbacks.activacion });
-    }
+    const { moment = 'activacion', pillarSummary, tone = 'directo' } = req.body || {};
 
     const systemInstruction = `Eres el Mentor de Mentalidad & Motivación de "MI SEGUNDO CEREBRO 4.0".
-Genera un mensaje de mentalidad conciso, impactante y con criterio para el momento: "${moment.toUpperCase()}".
+Genera un mensaje de mentalidad conciso, impactante y con criterio para el momento: "${String(moment).toUpperCase()}".
 Momentos:
 - ACTIVACION: Al iniciar el día. Enérgico, enfocado en intención, 3 prioridades y congruencia personal.
 - ENFOQUE: A mitad de jornada. Reenfoque estratégico, eliminación de ruido, ejecución implacable.
@@ -116,42 +700,24 @@ Momentos:
 Tono seleccionado: ${tone}.
 No uses clichés vacíos de autoayuda. Haz que cada palabra inspire responsabilidad y acción inmediata.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `Resumen de estado del usuario:\n${JSON.stringify(pillarSummary || {}, null, 2)}`,
-      config: {
-        systemInstruction,
-      },
+      config: { systemInstruction },
     });
 
-    return res.json({ message: response.text });
+    return res.json({ message: response.text || 'Enfócate en tus 3 prioridades críticas hoy.', model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/motivation:', error);
-    return res.status(500).json({ error: error.message });
+    return sendGeminiError(res, '/api/gemini/motivation', error);
   }
 });
 
 // Wisdom Library & Capsule Endpoint
 app.post('/api/gemini/wisdom', async (req: Request, res: Response) => {
   try {
-    const { bookTitle, author, chapter, excerpt } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
 
-    if (!ai || !apiKey) {
-      return res.json({
-        capsule: {
-          bookTitle: bookTitle || 'Principios para el Éxito',
-          author: author || 'Ray Dalio',
-          chapter: chapter || 'Capítulo 1',
-          coreIdea: 'La realidad funciona como una máquina maravillosa que recompensa a quien comprende la causa y el efecto sin autoengaño.',
-          quote: 'El dolor más la reflexión es igual al progreso.',
-          pageRef: 'Pág. 42',
-          aiInterpretation: 'El dolor emocional o profesional no debe evitarse ni suprimirse; es el indicador biológico de que estás enfrentando una verdad necesaria para crecer.',
-          personalApplication: 'Identifica qué conversación o hábito postergas por incomodidad y abórdalo hoy mismo.',
-          businessApplication: 'Analiza el fallo más reciente en tus operaciones empresariales como una oportunidad de depuración de sistemas.',
-          practicalAction: 'Escribe 1 fallo de esta semana, extrae la lección y modifica el proceso para que no se repita.',
-        },
-      });
-    }
+    const { bookTitle, author, chapter, excerpt, pageRef } = req.body || {};
 
     const systemInstruction = `Eres el Analista Intelectual de "MI SEGUNDO CEREBRO 4.0".
 A partir del texto o referencia de libro aportado por el usuario, extrae y sintetiza una Cápsula Diaria de Sabiduría en formato JSON estructurado:
@@ -169,49 +735,33 @@ A partir del texto o referencia de libro aportado por el usuario, extrae y sinte
 }
 Respeta los derechos de autor: no reproduzcas capítulos completos, únicamente extractos breves de análisis.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
-      contents: `Libro: ${bookTitle}, Autor: ${author}, Capítulo: ${chapter}\nContenido / Extracto:\n${excerpt || 'Resumen y principios fundamentales'}`,
+    const { response, usedModel } = await generateWithFallback(client, {
+      contents: `Libro: ${bookTitle || 'Sin título'}, Autor: ${author || 'Desconocido'}, Capítulo/Página: ${chapter || pageRef || 'General'}\nContenido / Extracto:\n${excerpt || 'Resumen y principios fundamentales'}`,
       config: {
         systemInstruction,
         responseMimeType: 'application/json',
       },
     });
 
-    return res.json({ capsule: JSON.parse(response.text || '{}') });
+    const parsed = parseJsonSafe<Record<string, any>>(response.text);
+    if (pageRef && !parsed.pageRef) parsed.pageRef = pageRef;
+    return res.json({ capsule: parsed, model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/wisdom:', error);
-    return res.status(500).json({ error: error.message });
+    return sendGeminiError(res, '/api/gemini/wisdom', error);
   }
 });
 
 // Executive Meeting Minutes & Audio Transcription Endpoint (Dirección & Estrategia + NoteLLM compatible)
 app.post('/api/gemini/meeting-minutes', async (req: Request, res: Response) => {
   try {
-    const { audioBase64, mimeType, rawNotes, businessName, scopeContext } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
 
-    if (!ai || !apiKey) {
-      const notesPreview = (rawNotes || '').trim();
-      return res.json({
-        transcript: notesPreview || 'Transcripción de ejemplo: Revisión de prioridades, aprendizajes de mentoría y acuerdos clave.',
-        minutes: {
-          title: notesPreview ? notesPreview.slice(0, 58) : 'Acta / Nota Estructurada',
-          context: notesPreview || 'Sesión de alineación estratégica y reflexión aplicada.',
-          decision: 'Priorizar acciones de alto impacto y ejecutar el primer paso medible hoy mismo.',
-          keyPoints: [
-            'Validación de objetivos prioritarios y responsables',
-            'Puntos clave extraídos de la sesión o mentoría',
-            'Seguimiento concreto en el tablero correspondiente',
-          ],
-          expectedOutcome: 'Mayor velocidad de ejecución, coherencia y trazabilidad.',
-        },
-        mode: 'offline_mode',
-      });
-    }
+    const { audioBase64, mimeType, rawNotes, businessName, scopeContext } = req.body || {};
 
     let transcript = (rawNotes || '').trim();
     if (audioBase64) {
-      const transcribed = await transcribeAudioBase64(audioBase64, mimeType || 'audio/webm');
+      const transcribed = await transcribeAudioBase64(client, audioBase64, mimeType || 'audio/webm');
       transcript = transcript ? `${transcribed}\n\nNotas adicionales:\n${transcript}` : transcribed;
     }
 
@@ -219,12 +769,11 @@ app.post('/api/gemini/meeting-minutes', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Se requiere un archivo de audio o notas de reunión.' });
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `Ámbito: ${scopeContext || 'Empresarial'}\nContexto / Empresa: ${businessName || 'General'}\n\nTranscripción / Notas:\n${transcript}`,
       config: {
         systemInstruction:
-          'Eres el Secretario Ejecutivo y Mentor Estratégico de "MI SEGUNDO CEREBRO 4.0". Analiza la transcripción o notas (puede ser una reunión empresarial o una mentoría/reflexión personal) y extrae un acta estructurada, precisa y accionable en español.',
+          'Eres el Secretario Ejecutivo y Mentor Estratégico de "MI SEGUNDO CEREBRO 4.0". Analiza la transcripción o notas (puede ser una reunión empresarial o una mentoría/reflexión personal o exportación de NotebookLM) y extrae un acta estructurada, precisa y accionable en español.',
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -244,41 +793,39 @@ app.post('/api/gemini/meeting-minutes', async (req: Request, res: Response) => {
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = parseJsonSafe<Record<string, any>>(response.text);
+    const normalizedMinutes = {
+      title: String(parsed.title || 'Acta de Reunión / Nota de Voz').trim(),
+      context: String(parsed.context || '').trim(),
+      decision: String(parsed.decision || parsed.context || transcript.slice(0, 280)).trim(),
+      keyPoints: Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.map((kp: any) => String(kp).trim()).filter(Boolean)
+        : [],
+      expectedOutcome: String(parsed.expectedOutcome || '').trim(),
+    };
+
     return res.json({
       transcript,
-      minutes: parsed,
+      minutes: normalizedMinutes,
+      model: usedModel,
     });
   } catch (error: any) {
-    console.error('Error in /api/gemini/meeting-minutes:', error);
-    return res.status(500).json({ error: error.message || 'Error al procesar acta de reunión' });
+    return sendGeminiError(res, '/api/gemini/meeting-minutes', error);
   }
 });
 
 // Personal Experiment Coach Endpoint (Isra García + Diego Dreyfus comparison & coaching)
 app.post('/api/gemini/experiment-coach', async (req: Request, res: Response) => {
   try {
-    const { experiment, linkedNotes = [], question } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const { experiment, linkedNotes = [], question } = req.body || {};
     if (!experiment) {
       return res.status(400).json({ error: 'Faltan datos del experimento.' });
     }
 
     const logs = Array.isArray(experiment.logs) ? experiment.logs : [];
-
-    if (!ai || !apiKey) {
-      const firstLog = logs[0];
-      const latestLog = logs[logs.length - 1];
-      return res.json({
-        feedback: [
-          `Análisis de Experimento "${experiment.title}" (${experiment.inspiration}):`,
-          logs.length >= 2
-            ? `• Comparativa (${firstLog.date} → ${latestLog.date}): llevas ${logs.length} registros en ruta hacia tu meta de ${experiment.durationDays} días. La consistencia real se mide comparando tu línea base contra tus acciones bajo presión.`
-            : `• Tienes ${logs.length} registro(s). Registra al menos 2-3 días consecutivos para medir deltas numéricos reales y cambios mentales.`,
-          `• Ajuste inmediato (estilo ${experiment.inspiration}): identifica qué excusa apareció esta semana y diseña una regla binaria no negociable para las próximas 48 horas.`,
-        ].join('\n'),
-        mode: 'offline_mode',
-      });
-    }
 
     const systemInstruction = `Eres el Mentor de Experimentos Personales de "MI SEGUNDO CEREBRO 4.0", combinando la filosofía pragmática de incomodidad y alto rendimiento de Isra García con la introspección cruda y coherencia radical de Diego Dreyfus.
 TU MISIÓN:
@@ -298,16 +845,14 @@ Registros cronológicos (${logs.length}): ${JSON.stringify(logs)}
 Notas/Mentorías vinculadas: ${JSON.stringify(linkedNotes)}
 Pregunta específica del usuario: ${question || 'Compara mis registros desde el día 1 hasta hoy y dime qué debo ajustar para elevar mis resultados.'}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: promptPayload,
       config: { systemInstruction },
     });
 
-    return res.json({ feedback: response.text });
+    return res.json({ feedback: response.text || 'Sin retroalimentación generada.', model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/experiment-coach:', error);
-    return res.status(500).json({ error: error.message || 'Error en Coach de Experimentos' });
+    return sendGeminiError(res, '/api/gemini/experiment-coach', error);
   }
 });
 
@@ -320,75 +865,10 @@ app.post('/api/gemini/experiment-from-template', async (req: Request, res: Respo
       return res.status(400).json({ error: 'Se requiere el texto de la plantilla o lista de pasos.' });
     }
 
-    const extractFallbackExperiment = (text: string) => {
-      const lines = text
-        .split(/\r?\n/)
-        .map((l) => l.replace(/^[-*•\d.)\]]+\s*/, '').trim())
-        .filter((l) => l.length > 2);
+    const client = requireAiClient(res);
+    if (!client) return;
 
-      const daysMatch = text.match(/(\d{1,3})\s*(?:d[ií]as|dias|semanas)/i);
-      let durationDays = 21;
-      if (daysMatch) {
-        const val = parseInt(daysMatch[1], 10);
-        durationDays = /semanas/i.test(daysMatch[0]) ? Math.min(365, val * 7) : Math.max(3, Math.min(365, val));
-      }
-
-      const lower = text.toLowerCase();
-      let pillar: 'espiritual' | 'emocional' | 'fisico' | 'intelectual' | 'financiero' = 'fisico';
-      if (lower.includes('orac') || lower.includes('fe') || lower.includes('espirit') || lower.includes('medit')) {
-        pillar = 'espiritual';
-      } else if (lower.includes('emoc') || lower.includes('ansied') || lower.includes('paz') || lower.includes('calma')) {
-        pillar = 'emocional';
-      } else if (lower.includes('le') || lower.includes('estud') || lower.includes('enfoq') || lower.includes('deep work')) {
-        pillar = 'intelectual';
-      } else if (lower.includes('dinero') || lower.includes('ahorr') || lower.includes('vent') || lower.includes('ingres')) {
-        pillar = 'financiero';
-      }
-
-      const title =
-        String(customTitle).trim() ||
-        (lines[0] && lines[0].length <= 68 ? lines[0] : 'Experimento desde Plantilla Personalizada');
-
-      const dailySubtasks = lines.slice(0, 7).map((l) => l.slice(0, 75));
-      if (dailySubtasks.length === 0) {
-        dailySubtasks.push('Ejecutar protocolo principal del día', 'Registrar aprendizaje clave');
-      }
-
-      const fields = [
-        { id: `fld_${Date.now()}_0`, label: 'Avance del Protocolo (%)', type: 'percent_10', unit: '%' },
-        { id: `fld_${Date.now()}_1`, label: 'Tiempo Dedicado', type: 'timer_minutes', unit: 'min' },
-        { id: `fld_${Date.now()}_2`, label: 'Nivel de Energía / Enfoque (1-10)', type: 'number', unit: 'pts' },
-        {
-          id: `fld_${Date.now()}_3`,
-          label: 'Observación mental y resultados del día',
-          type: 'text',
-          placeholder: '¿Qué funcionó, qué resistencia apareció y qué ajustas mañana?',
-        },
-      ];
-
-      return {
-        title,
-        inspiration: 'Propio',
-        inspirationColor: 'fuchsia',
-        pillar,
-        goalDescription: `Ejecutar de forma consistente los ${dailySubtasks.length} pasos clave de esta plantilla durante ${durationDays} días.`,
-        hypothesis: 'Aplicar esta secuencia de pasos sin negociar excusas producirá mejoras medibles en disciplina y resultados.',
-        purpose: 'Convertir una guía teórica o plantilla en ejecución diaria observable y comparativa.',
-        durationDays,
-        dailySubtasks,
-        fields,
-      };
-    };
-
-    if (!ai || !apiKey) {
-      return res.json({
-        experimentDraft: extractFallbackExperiment(raw),
-        mode: 'offline_mode',
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `${customTitle ? `Título sugerido por usuario: ${customTitle}\n` : ''}Plantilla / Lista de pasos enviada por el usuario:\n"""\n${raw}\n"""`,
       config: {
         systemInstruction: `Eres el Arquitecto de Experimentos Personales de "MI SEGUNDO CEREBRO 4.0".
@@ -446,7 +926,7 @@ Reglas:
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
+    const parsed = parseJsonSafe<Record<string, any>>(response.text);
     const validPillars = ['espiritual', 'emocional', 'fisico', 'intelectual', 'financiero'];
     const validColors = ['fuchsia', 'indigo', 'emerald', 'amber', 'rose', 'cyan'];
     const validTypes = ['text', 'number', 'checkbox', 'percent_10', 'timer_minutes'];
@@ -485,13 +965,16 @@ Reglas:
     };
 
     if (normalized.fields.length === 0) {
-      normalized.fields = extractFallbackExperiment(raw).fields;
+      normalized.fields = [
+        { id: `fld_${Date.now()}_0`, label: 'Avance del Protocolo (%)', type: 'percent_10', unit: '%', placeholder: undefined },
+        { id: `fld_${Date.now()}_1`, label: 'Tiempo Dedicado', type: 'timer_minutes', unit: 'min', placeholder: undefined },
+        { id: `fld_${Date.now()}_2`, label: 'Observación mental del día', type: 'text', unit: undefined, placeholder: '¿Qué funcionó hoy?' },
+      ];
     }
 
-    return res.json({ experimentDraft: normalized });
+    return res.json({ experimentDraft: normalized, model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/experiment-from-template:', error);
-    return res.status(500).json({ error: error.message || 'Error convirtiendo plantilla en experimento' });
+    return sendGeminiError(res, '/api/gemini/experiment-from-template', error);
   }
 });
 
@@ -575,65 +1058,16 @@ const systemAssistantDeclarations: FunctionDeclaration[] = [
 // System AI Assistant Endpoint (Multimodal: Text, Audio Voice, Receipt Images/PDF)
 app.post('/api/gemini/assistant', async (req: Request, res: Response) => {
   try {
-    const { message, audioBase64, audioMimeType, fileBase64, fileMimeType, appSnapshot } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const { message, audioBase64, audioMimeType, fileBase64, fileMimeType, appSnapshot } = req.body || {};
 
     let effectivePrompt = (message || '').trim();
 
-    if (audioBase64 && ai && apiKey) {
-      const transcribed = await transcribeAudioBase64(audioBase64, audioMimeType || 'audio/webm');
+    if (audioBase64) {
+      const transcribed = await transcribeAudioBase64(client, audioBase64, audioMimeType || 'audio/webm');
       effectivePrompt = effectivePrompt ? `${effectivePrompt}\n[Audio transcrito]: ${transcribed}` : transcribed;
-    }
-
-    if (!ai || !apiKey) {
-      // Deterministic offline intent parser for common commands
-      const lower = effectivePrompt.toLowerCase();
-      const actions: { name: string; args: Record<string, any> }[] = [];
-      let reply = 'Modo local activo (sin API Key en entorno). ';
-
-      if (lower.includes('super mañana') || lower.includes('súper mañana')) {
-        actions.push({ name: 'navigate_module', args: { viewId: 'super_morning' } });
-        reply += 'Abriendo tu módulo de Súper Mañana.';
-      } else if (lower.includes('super noche') || lower.includes('súper noche')) {
-        actions.push({ name: 'navigate_module', args: { viewId: 'super_night' } });
-        reply += 'Abriendo tu módulo de Súper Noche.';
-      } else if (lower.includes('pago') || lower.includes('gasto') || lower.includes('transferencia')) {
-        const match = effectivePrompt.match(/(\d+(?:\.\d{1,2})?)/);
-        const amount = match ? parseFloat(match[1]) : 50;
-        actions.push({
-          name: 'register_payment',
-          args: {
-            type: 'expense',
-            amount,
-            category: 'Gasto / Transferencia',
-            description: effectivePrompt || 'Registro rápido desde asistente',
-            scope: 'personal',
-          },
-        });
-        reply += `He registrado el movimiento de $${amount} en Finanzas Personales.`;
-      } else if (lower.includes('recordatorio') || lower.includes('recuerdame') || lower.includes('recuérdame')) {
-        actions.push({
-          name: 'create_reminder',
-          args: {
-            title: effectivePrompt.replace(/recu[eé]rdame|recordatorio/gi, '').trim() || 'Recordatorio del asistente',
-            originModule: 'sistema',
-            showInMiDia: true,
-          },
-        });
-        reply += 'Recordatorio guardado en tu bandeja unificada y visible en Mi Día.';
-      } else {
-        actions.push({
-          name: 'create_task',
-          args: {
-            title: effectivePrompt || 'Nueva acción programada',
-            scope: lower.includes('empresa') || lower.includes('reuni') ? 'business' : 'personal',
-            priority: 'important',
-            remindInInbox: true,
-          },
-        });
-        reply += 'He agendado esa acción en Gestión de Tareas y en tu bandeja de recordatorios.';
-      }
-
-      return res.json({ reply, transcript: effectivePrompt, actions, mode: 'offline_mode' });
     }
 
     const parts: any[] = [];
@@ -651,8 +1085,7 @@ app.post('/api/gemini/assistant', async (req: Request, res: Response) => {
       text: `Fecha actual: ${todayStr}\nEstado actual resumido del sistema:\n${JSON.stringify(appSnapshot || {}, null, 2)}\n\nSolicitud del usuario:\n${effectivePrompt || 'Analiza el archivo o comprobante adjunto y ejecuta la acción correspondiente dentro del sistema.'}`,
     });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: parts,
       config: {
         systemInstruction: `Eres el Asistente Operativo Interno de "MI SEGUNDO CEREBRO 4.0".
@@ -691,38 +1124,22 @@ ALCANCE ESTRICTO:
       reply: reply || 'Listo, solicitud procesada en el sistema.',
       transcript: effectivePrompt,
       actions,
+      model: usedModel,
     });
   } catch (error: any) {
-    console.error('Error in /api/gemini/assistant:', error);
-    return res.status(500).json({ error: error.message || 'Error en asistente del sistema' });
+    return sendGeminiError(res, '/api/gemini/assistant', error);
   }
 });
 
 // VPS Webhook Bridge Endpoint for WhatsApp (Evolution API / Meta), Telegram Bot & Email (n8n/SMTP)
 app.post('/api/integrations/webhook', async (req: Request, res: Response) => {
   try {
-    const { channel = 'whatsapp', sender = '', text = '', attachmentBase64, attachmentMimeType } = req.body;
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const { channel = 'whatsapp', sender = '', text = '', attachmentBase64, attachmentMimeType } = req.body || {};
     if (!text && !attachmentBase64) {
       return res.status(400).json({ error: 'Payload vacío: se requiere text o attachmentBase64.' });
-    }
-
-    // In VPS production with PostgreSQL, this route persists directly into SQL.
-    // Here it parses the external message into structured system actions ready for execution.
-    if (!ai || !apiKey) {
-      return res.json({
-        status: 'received',
-        channel,
-        sender,
-        parsedAction: {
-          name: 'create_reminder',
-          args: {
-            title: `[${String(channel).toUpperCase()}] ${String(text).slice(0, 80)}`,
-            content: text,
-            originModule: 'sistema',
-            showInMiDia: true,
-          },
-        },
-      });
     }
 
     const parts: any[] = [];
@@ -731,8 +1148,7 @@ app.post('/api/integrations/webhook', async (req: Request, res: Response) => {
     }
     parts.push({ text: `Mensaje entrante vía ${channel} de ${sender || 'usuario'}:\n${text}` });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: parts,
       config: {
         systemInstruction: 'Convierte este mensaje externo de WhatsApp/Telegram/Correo en una acción interna exacta para Segundo Cerebro 4.0.',
@@ -744,12 +1160,12 @@ app.post('/api/integrations/webhook', async (req: Request, res: Response) => {
       status: 'processed',
       channel,
       sender,
+      model: usedModel,
       actions: (response.functionCalls || []).map((fc) => ({ name: fc.name, args: fc.args })),
       reply: response.text || 'Mensaje procesado en Segundo Cerebro 4.0.',
     });
   } catch (error: any) {
-    console.error('Error in /api/integrations/webhook:', error);
-    return res.status(500).json({ error: error.message });
+    return sendGeminiError(res, '/api/integrations/webhook', error);
   }
 });
 
@@ -789,42 +1205,255 @@ app.get('/api/emotions', (_req: Request, res: Response) => {
   return res.json({ entries: emotionLogsStore });
 });
 
+// AI Handwriting Recognition (Apple Pencil / Ink Canvas -> Clean Spanish text & checklists)
+app.post('/api/gemini/handwriting-ocr', async (req: Request, res: Response) => {
+  try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const { imageBase64, mimeType = 'image/png' } = req.body || {};
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.status(400).json({ error: 'Se requiere imageBase64 para reconocer la escritura.' });
+    }
+
+    const cleanMime = String(mimeType).split(';')[0].trim().toLowerCase();
+    const allowedMimes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+    const safeMime = allowedMimes.has(cleanMime) ? cleanMime : 'image/png';
+
+    const { response, usedModel } = await generateWithFallback(client, {
+      contents: {
+        parts: [
+          { inlineData: { mimeType: safeMime, data: imageBase64 } },
+          {
+            text: 'Transcribe con precisión el texto escrito a mano en esta nota (Apple Pencil / iPad) en español claro. Si ves casillas o listas de tareas usa formato "- [ ] tarea". Conserva fechas (ej. 15/01/2027) y montos (ej. gasto de $120 o ingreso de $500) exactamente como estén escritos. Devuelve únicamente el texto transcrito sin comentarios adicionales.',
+          },
+        ],
+      },
+      config: { temperature: 0.1 },
+    });
+
+    const text = (response.text || '').trim();
+    return res.json({ text, model: usedModel });
+  } catch (error: any) {
+    return sendGeminiError(res, '/api/gemini/handwriting-ocr', error);
+  }
+});
+
+// AI Voice Dictation Fallback (Audio -> Clean Spanish text for Notes on any device/browser)
+app.post('/api/gemini/dictate-audio', async (req: Request, res: Response) => {
+  try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const { audioBase64, mimeType = 'audio/webm' } = req.body || {};
+    if (!audioBase64 || typeof audioBase64 !== 'string') {
+      return res.status(400).json({ error: 'Se requiere audioBase64 para transcribir el dictado.' });
+    }
+
+    const cleanMime = String(mimeType).split(';')[0].trim().toLowerCase();
+    const safeMime = cleanMime.startsWith('audio/') ? cleanMime : 'audio/webm';
+
+    const { response, usedModel } = await generateWithFallback(client, {
+      contents: {
+        parts: [
+          { inlineData: { mimeType: safeMime, data: audioBase64 } },
+          {
+            text: 'Transcribe literalmente este dictado de voz en español claro, con buena puntuación y tildes. Conserva fechas (ej. 15/01/2027, próximo lunes) y montos (ej. gasto de $120, ingreso de $500) tal como se dicen. Devuelve únicamente el texto transcrito sin comentarios ni comillas.',
+          },
+        ],
+      },
+      config: { temperature: 0.1 },
+    });
+
+    const text = (response.text || '').trim();
+    return res.json({ text, model: usedModel });
+  } catch (error: any) {
+    return sendGeminiError(res, '/api/gemini/dictate-audio', error);
+  }
+});
+
+// AI Topic Note Assistant (Generates a rich editable Notability note on any user-specified topic)
+app.post('/api/gemini/note-topic-assistant', async (req: Request, res: Response) => {
+  try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const {
+      topic = '',
+      instructions = '',
+      scopeTags = ['personal'],
+      linkedLabel = '',
+      style = 'estructurada',
+    } = req.body || {};
+
+    const cleanTopic = String(topic).trim();
+    if (!cleanTopic) {
+      return res.status(400).json({ error: 'Indica el tema sobre el cual deseas crear la nota.' });
+    }
+
+    const scopeStr = Array.isArray(scopeTags) && scopeTags.length > 0
+      ? scopeTags.map((t: string) => (t === 'business' ? 'Empresarial' : 'Personal')).join(' + ')
+      : 'Personal';
+
+    const styleHints: Record<string, string> = {
+      estructurada: 'Guía ejecutiva estructurada con secciones claras, puntos clave en negrita y checklist accionable.',
+      plan_accion: 'Plan de acción paso a paso con hitos, fechas sugeridas y checklist "- [ ]" ejecutable.',
+      estudio: 'Apuntes profundos de estudio/resumen con conceptos clave, preguntas de reflexión y aplicación práctica.',
+      reunion: 'Plantilla de agenda y bitácora lista para tomar acuerdos, contexto, resolución y compromisos.',
+    };
+
+    const { response, usedModel } = await generateWithFallback(client, {
+      contents: `Tema específico: "${cleanTopic}"\nÁmbito: ${scopeStr}\nEstilo solicitado: ${styleHints[style] || styleHints.estructurada}${linkedLabel ? `\nVinculada a: ${linkedLabel}` : ''}${instructions ? `\nIndicaciones adicionales del usuario: ${String(instructions).trim()}` : ''}`,
+      config: {
+        systemInstruction:
+          'Eres el Arquitecto de Notas Inteligentes de "MI SEGUNDO CEREBRO 4.0". Crea una nota profesional, práctica y directamente editable en español sobre el tema solicitado. Usa formato Markdown limpio compatible con el editor en vivo: "# Título" para el encabezado principal, "## Subtítulo" para bloques, "- [ ] ..." para tareas/checklists interactivos, "- ..." para viñetas y "**texto**" para énfasis. Si el tema involucra plazos o presupuestos, incluye ejemplos realistas de fechas (ej. DD/MM/YYYY) o montos ($...) para que el usuario pueda agendarlos o registrarlos con un clic. Evita bloques de código o tablas complejas.',
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING, description: 'Título claro y conciso de la nota' },
+            content: { type: Type.STRING, description: 'Contenido completo en Markdown enriquecido listo para editar' },
+            suggestedCategory: {
+              type: Type.STRING,
+              description: 'Una de: general, ideas, finanzas, personal, bitacora',
+            },
+          },
+          required: ['title', 'content', 'suggestedCategory'],
+        },
+      },
+    });
+
+    const parsed = parseJsonSafe<{
+      title?: string;
+      content?: string;
+      suggestedCategory?: string;
+    }>(response.text);
+
+    const allowedCategories = new Set(['general', 'ideas', 'finanzas', 'personal', 'bitacora']);
+    const rawCat = String(parsed.suggestedCategory || 'general').toLowerCase();
+    const suggestedCategory = allowedCategories.has(rawCat) ? rawCat : 'general';
+
+    return res.json({
+      title: String(parsed.title || cleanTopic).trim(),
+      content: String(parsed.content || `# ${cleanTopic}\n\n- [ ] Primer paso...`).trim(),
+      suggestedCategory,
+      model: usedModel,
+    });
+  } catch (error: any) {
+    return sendGeminiError(res, '/api/gemini/note-topic-assistant', error);
+  }
+});
+
+// AI Note / Bitácora Summarizer (Analyzes a selected note and returns executive summary, key points, decisions, and action items)
+app.post('/api/gemini/note-summary', async (req: Request, res: Response) => {
+  try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
+    const {
+      title = '',
+      content = '',
+      tags = [],
+      linkedContext = '',
+      focusPrompt = '',
+    } = req.body || {};
+
+    const cleanTitle = String(title || '').trim();
+    const cleanContent = String(content || '').trim();
+    if (!cleanContent && !cleanTitle) {
+      return res.status(400).json({ error: 'La nota seleccionada no tiene contenido suficiente para resumir.' });
+    }
+
+    const tagsLabel = Array.isArray(tags) && tags.length > 0 ? tags.join(', ') : 'General';
+    const userPrompt = [
+      `Título de la nota: "${cleanTitle || 'Sin título'}"`,
+      `Etiquetas / Áreas: ${tagsLabel}`,
+      linkedContext ? `Vinculaciones: ${String(linkedContext).trim()}` : '',
+      focusPrompt ? `Enfoque solicitado por el usuario: ${String(focusPrompt).trim()}` : '',
+      '',
+      'Contenido completo de la nota:',
+      cleanContent.slice(0, 24000),
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const { response, usedModel } = await generateWithFallback(client, {
+      contents: userPrompt,
+      config: {
+        systemInstruction:
+          'Eres el Analista Ejecutivo de Bitácoras de "MI SEGUNDO CEREBRO 4.0". Analiza la nota proporcionada en español y extrae un resumen claro, estructurado y accionable de tipo bitácora directiva/personal. No inventes datos que no estén sugeridos por la nota; sintetiza con precisión el resumen ejecutivo, el contexto o propósito, la resolución o conclusión principal, los puntos más importantes, las acciones concretas/pendientes y el impacto esperado.',
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            executiveSummary: {
+              type: Type.STRING,
+              description: 'Resumen ejecutivo de la bitácora en 2 a 4 oraciones claras y directas.',
+            },
+            context: {
+              type: Type.STRING,
+              description: 'Contexto, motivo o tema central que aborda la nota.',
+            },
+            resolution: {
+              type: Type.STRING,
+              description: 'Resolución, decisión adoptada o conclusión principal.',
+            },
+            keyPoints: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Lista de 3 a 7 puntos más importantes de la nota.',
+            },
+            actionItems: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: 'Lista de próximos pasos, tareas o compromisos accionables detectados o sugeridos.',
+            },
+            expectedImpact: {
+              type: Type.STRING,
+              description: 'Impacto esperado, aprendizaje clave o resultado objetivo.',
+            },
+          },
+          required: ['executiveSummary', 'context', 'resolution', 'keyPoints', 'actionItems', 'expectedImpact'],
+        },
+      },
+    });
+
+    const parsed = parseJsonSafe<{
+      executiveSummary?: string;
+      context?: string;
+      resolution?: string;
+      keyPoints?: string[];
+      actionItems?: string[];
+      expectedImpact?: string;
+    }>(response.text);
+
+    return res.json({
+      executiveSummary: String(parsed.executiveSummary || '').trim(),
+      context: String(parsed.context || '').trim(),
+      resolution: String(parsed.resolution || '').trim(),
+      keyPoints: Array.isArray(parsed.keyPoints)
+        ? parsed.keyPoints.map((x) => String(x).trim()).filter(Boolean)
+        : [],
+      actionItems: Array.isArray(parsed.actionItems)
+        ? parsed.actionItems.map((x) => String(x).trim()).filter(Boolean)
+        : [],
+      expectedImpact: String(parsed.expectedImpact || '').trim(),
+      model: usedModel,
+    });
+  } catch (error: any) {
+    return sendGeminiError(res, '/api/gemini/note-summary', error);
+  }
+});
+
 // AI Daily Habit Quote / Meditation Message Endpoint
 app.post('/api/gemini/habit-quote', async (req: Request, res: Response) => {
   try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
     const { habitTitle, topic = 'motivacion', description = '' } = req.body || {};
-    const offlinePools: Record<string, string[]> = {
-      motivacion: [
-        'No negocies con la comodidad de las 6 AM; quien conquista la primera hora conquista el día entero.',
-        'Tu disciplina es el voto silencioso por la persona en la que te estás convirtiendo hoy.',
-        'Haz lo importante antes de que el mundo empiece a pedirte lo urgente.',
-        'La excelencia no es un estado de ánimo, es una decisión ejecutada aunque no tengas ganas.',
-      ],
-      meditacion: [
-        'Observa tus pensamientos como nubes pasando: no tienes que pelear con ellos ni obedecerlos.',
-        'En la quietud absoluta antes del ruido está la claridad que cien reuniones no pueden darte.',
-        'Respira lento. Suelta el resultado que no controlas y habita plenamente este segundo.',
-        'Mente "No Sé": mira tu mañana sin juicios viejos, con asombro y lucidez limpia.',
-      ],
-      isra: [
-        'Abraza hoy una micro-incomodidad voluntaria; ahí es donde se forja tu temple.',
-        'No te creas tus excusas elegantes. Mide tu compromiso por hechos visibles antes de las 10 AM.',
-      ],
-    };
 
-    if (!ai || !apiKey) {
-      const lower = `${habitTitle || ''} ${topic}`.toLowerCase();
-      const pool = lower.includes('medit') || lower.includes('vipass') || lower.includes('silencio')
-        ? offlinePools.meditacion
-        : lower.includes('isra') || lower.includes('incomod')
-        ? offlinePools.isra
-        : offlinePools.motivacion;
-      const picked = pool[Math.floor(Math.random() * pool.length)];
-      return res.json({ quote: picked, mode: 'offline_mode' });
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `Hábito matutino: "${habitTitle || 'Activación Matutina'}"\nTema / Descripción: "${description || topic}"\nSemilla diaria: ${new Date().toISOString().split('T')[0]}-${Math.random().toString(36).slice(2, 6)}`,
       config: {
         systemInstruction:
@@ -832,64 +1461,26 @@ app.post('/api/gemini/habit-quote', async (req: Request, res: Response) => {
       },
     });
 
-    return res.json({ quote: (response.text || '').trim().replace(/^["']|["']$/g, '') });
+    return res.json({ quote: (response.text || '').trim().replace(/^["']|["']$/g, ''), model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/habit-quote:', error);
-    return res.status(500).json({ error: error.message || 'Error generando mensaje diario' });
+    return sendGeminiError(res, '/api/gemini/habit-quote', error);
   }
 });
 
 // Spiritual Guide Endpoint (Catholic Lectio Divina & Isra García / Contemplative)
 app.post('/api/gemini/spiritual-guide', async (req: Request, res: Response) => {
   try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
     const { tradition = 'catolica', theme = 'fortaleza' } = req.body || {};
-
-    if (!ai || !apiKey) {
-      if (tradition === 'catolica') {
-        const catholicFallbacks: Record<string, { reference: string; verse: string; reflection: string; prayer: string }> = {
-          fortaleza: {
-            reference: 'Isaías 41,10',
-            verse: 'No temas, porque yo estoy contigo; no te angusties, porque yo soy tu Dios. Te fortaleceré y te ayudaré.',
-            reflection: 'La verdadera fortaleza directiva no nace de la autosuficiencia rígida, sino de avanzar con paz interior sabiendo que no caminas solo.',
-            prayer: 'Señor, dame serenidad para decidir con justicia, coraje para hacer lo correcto y humildad para soltar lo que no controlo.',
-          },
-          proposito: {
-            reference: 'Jeremías 29,11',
-            verse: 'Porque yo sé muy bien los planes que tengo para ustedes, planes de bienestar y no de calamidad, a fin de darles un futuro y una esperanza.',
-            reflection: 'Tus proyectos materiales cobran sentido eterno cuando sirven a las personas y se construyen con verdad y rectitud.',
-            prayer: 'Alinea hoy mi agenda con Tu propósito, y haz de mi trabajo un instrumento de bien y paz.',
-          },
-          paz: {
-            reference: 'Filipenses 4,6-7',
-            verse: 'No se inquieten por nada; más bien, en toda ocasión, con oración y ruego, presenten sus peticiones a Dios y denle gracias.',
-            reflection: 'La gratitud es el antídoto inmediato contra la ansiedad anticipatoria. Entrega las cargas antes de descansar.',
-            prayer: 'Guarda mi corazón y mis pensamientos en Tu paz que sobrepasa todo entendimiento.',
-          },
-        };
-        return res.json({
-          guide: catholicFallbacks[theme] || catholicFallbacks.fortaleza,
-          mode: 'offline_mode',
-        });
-      }
-
-      return res.json({
-        guide: {
-          reference: 'Práctica de Quietud & Mente "No Sé" (Isra García)',
-          verse: 'Deja de intentar encajar cada segundo en etiquetas viejas. Observa este instante con presencia limpia, gratitud y asombro.',
-          reflection: 'Cuando silencias el ruido de las expectativas ajenas y agradeces lo esencial, recuperas tu eje espiritual.',
-          prayer: 'Hoy elijo estar presente, agradecer sin prisa y actuar con coherencia.',
-        },
-        mode: 'offline_mode',
-      });
-    }
 
     const systemInstruction =
       tradition === 'catolica'
         ? 'Eres un acompañante espiritual católico sereno y profundo. Devuelve un JSON con: { "reference": "Cita bíblica exacta (Biblia Católica)", "verse": "Texto breve fiel del versículo", "reflection": "Reflexión práctica aplicada a la vida diaria y liderazgo", "prayer": "Oración breve y sincera de 2 líneas" }.'
         : 'Eres un guía espiritual no confesional inspirado en la quietud contemplativa y prácticas de presencia de Isra García. Devuelve un JSON con: { "reference": "Nombre de la práctica o principio", "verse": "Frase o principio de quietud", "reflection": "Reflexión práctica para conectar con propósito y gratitud", "prayer": "Intención o afirmación serena de 2 líneas" }.';
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `Tema o necesidad espiritual actual: ${theme}. Fecha: ${new Date().toISOString().split('T')[0]}`,
       config: {
         systemInstruction,
@@ -897,49 +1488,21 @@ app.post('/api/gemini/spiritual-guide', async (req: Request, res: Response) => {
       },
     });
 
-    return res.json({ guide: JSON.parse(response.text || '{}') });
+    return res.json({ guide: parseJsonSafe(response.text), model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/spiritual-guide:', error);
-    return res.status(500).json({ error: error.message || 'Error en guía espiritual' });
+    return sendGeminiError(res, '/api/gemini/spiritual-guide', error);
   }
 });
 
 // AI OKR & KPI Advisor for Multi-Business Projects
 app.post('/api/gemini/suggest-okrs', async (req: Request, res: Response) => {
   try {
+    const client = requireAiClient(res);
+    if (!client) return;
+
     const { businessName, sector, revenueTarget, actualRevenue, currentProjects = [] } = req.body || {};
 
-    if (!ai || !apiKey) {
-      return res.json({
-        suggestions: [
-          {
-            title: `Incrementar conversión comercial y retención en ${businessName || 'la empresa'} (+25% ingresos recurrentes)`,
-            horizon: 'quarterly',
-            pillar: 'financiero',
-            kpiMetric: 'MRR / Margen Neto / Tasa de Cierre',
-            milestones: [
-              'Auditar embudo de ventas y definir métrica semanal de propuestas enviadas',
-              'Estandarizar proceso de onboarding para elevar retención sobre 85%',
-              'Alcanzar el 100% de la meta de ingresos mensual proyectada',
-            ],
-          },
-          {
-            title: `Sistematizar entregas y reducir cuellos de botella operativos en ${sector || 'operaciones'}`,
-            horizon: 'quarterly',
-            pillar: 'intelectual',
-            kpiMetric: 'Tiempo de Entrega (Cycle Time) & NPS',
-            milestones: [
-              'Documentar los 3 procesos críticos del equipo en checklist repetibles',
-              'Medir satisfacción (NPS >= 90) al cierre de cada proyecto',
-            ],
-          },
-        ],
-        mode: 'offline_mode',
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+    const { response, usedModel } = await generateWithFallback(client, {
       contents: `Empresa: ${businessName}\nSector: ${sector}\nMeta ingresos mensuales: $${revenueTarget || 0}\nIngresos actuales: $${actualRevenue || 0}\nProyectos activos: ${JSON.stringify(currentProjects)}`,
       config: {
         systemInstruction:
@@ -948,83 +1511,112 @@ app.post('/api/gemini/suggest-okrs', async (req: Request, res: Response) => {
       },
     });
 
-    const parsed = JSON.parse(response.text || '{}');
-    return res.json({ suggestions: parsed.suggestions || [] });
+    const parsed = parseJsonSafe<{ suggestions?: any[] }>(response.text);
+    return res.json({ suggestions: parsed.suggestions || [], model: usedModel });
   } catch (error: any) {
-    console.error('Error in /api/gemini/suggest-okrs:', error);
-    return res.status(500).json({ error: error.message || 'Error generando sugerencias OKR' });
+    return sendGeminiError(res, '/api/gemini/suggest-okrs', error);
   }
+});
+
+// Optional server-side disk backup endpoint (active only when ENABLE_DISK_STORAGE=true or DATA_DIR is set)
+app.get('/api/storage/status', (_req: Request, res: Response) => {
+  res.json({
+    diskPersistenceEnabled: STORAGE_PATHS.enabled,
+    dataDir: STORAGE_PATHS.enabled ? STORAGE_PATHS.dataDir : null,
+    backupDir: STORAGE_PATHS.enabled ? STORAGE_PATHS.backupDir : null,
+  });
 });
 
 // Health check
 app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', service: 'Mi Segundo Cerebro 4.0 API', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    service: 'Mi Segundo Cerebro 4.0 API',
+    nodeEnv: process.env.NODE_ENV || 'development',
+    port: PORT,
+    aiConfigured: Boolean(getApiKey()),
+    model: TEXT_MODEL,
+    fallbackModels: FALLBACK_MODELS,
+    timeoutMs: GEMINI_TIMEOUT_MS,
+    diskPersistenceEnabled: STORAGE_PATHS.enabled,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Always return JSON 404 for unknown /api/* routes (never fall through to SPA index.html)
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({
+    error: `Ruta API no encontrada: ${req.method} ${req.originalUrl}`,
+  });
 });
 
 // Vite middleware in dev or static files in production
 async function startServer() {
   const httpServer = http.createServer(app);
-  let viteMiddleware: any = null;
-  let viteReadyPromise: Promise<void> | null = null;
 
-  if (process.env.NODE_ENV !== 'production') {
-    app.use((req: Request, res: Response, next) => {
-      if (req.path.startsWith('/api')) {
-        return next();
-      }
-      if (viteMiddleware) {
-        return viteMiddleware(req, res, next);
-      }
-      if (viteReadyPromise) {
-        viteReadyPromise
-          .then(() => {
-            if (viteMiddleware) viteMiddleware(req, res, next);
-            else next();
-          })
-          .catch(next);
-      } else {
-        next();
-      }
+  if (!IS_PROD) {
+    const disableHmr = process.env.DISABLE_HMR === 'true';
+
+    // Initialize Vite concurrently so port 3000 binds immediately without timing out cold starts
+    const viteReadyPromise = import('vite').then(({ createServer: createViteServer }) =>
+      createViteServer({
+        server: {
+          middlewareMode: true,
+          hmr: disableHmr ? false : { server: httpServer },
+          ws: disableHmr ? false : undefined,
+        },
+        appType: 'spa',
+      })
+    );
+
+    viteReadyPromise.catch((err) => {
+      console.error('Failed to initialize Vite dev middleware:', err);
+    });
+
+    app.use((req, res, next) => {
+      viteReadyPromise
+        .then((vite) => vite.middlewares(req, res, next))
+        .catch((err) => next(err));
     });
   } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
+    const distDir = path.join(__dirname, 'dist');
+    app.use(express.static(distDir));
     app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.join(distDir, 'index.html'));
     });
   }
 
   httpServer.on('error', (err: any) => {
-    if (err.code === 'EADDRINUSE' && PORT !== 3000) {
-      console.warn(`Port ${PORT} in use, falling back to port 3000`);
-      httpServer.listen(3000, '0.0.0.0', () => {
-        console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:3000`);
-      });
+    if (err.code === 'EADDRINUSE') {
+      if (!IS_PROD && PORT !== 3000) {
+        console.warn(`Port ${PORT} in use, falling back to port 3000`);
+        httpServer.listen(3000, HOST, () => {
+          console.log(`Mi Segundo Cerebro 4.0 running on http://${HOST}:3000`);
+        });
+      } else {
+        console.error(
+          `El puerto ${PORT} ya está en uso (EADDRINUSE). Cambia la variable PORT en tu entorno o detén el proceso anterior.`
+        );
+        process.exit(1);
+      }
     } else {
       console.error('Server error:', err);
     }
   });
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`Mi Segundo Cerebro 4.0 running on http://0.0.0.0:${PORT}`);
+  httpServer.listen(PORT, HOST, () => {
+    console.log(
+      [
+        `[Mi Segundo Cerebro 4.0] Servidor activo en http://${HOST}:${PORT} (${IS_PROD ? 'production' : 'development'})`,
+        `  · GEMINI_API_KEY: ${getApiKey() ? 'CONFIGURADA' : 'NO CONFIGURADA (IA responderá HTTP 503)'}`,
+        `  · Cadena de modelos IA: ${MODEL_CHAIN.join(' -> ')} (timeout: ${GEMINI_TIMEOUT_MS}ms)`,
+        `  · Persistencia en disco: ${STORAGE_PATHS.enabled ? `${STORAGE_PATHS.dataDir} (respaldos: ${STORAGE_PATHS.backupDir})` : 'Desactivada (solo navegador)'}`,
+      ].join('\n')
+    );
   });
-
-  if (process.env.NODE_ENV !== 'production') {
-    viteReadyPromise = (async () => {
-      const { createServer: createViteServer } = await import('vite');
-      const vite = await createViteServer({
-        server: {
-          middlewareMode: true,
-          hmr: process.env.DISABLE_HMR === 'true' ? false : { server: httpServer },
-        },
-        appType: 'spa',
-      });
-      viteMiddleware = vite.middlewares;
-    })();
-    await viteReadyPromise;
-  }
 }
 
 startServer().catch((err) => {
   console.error('Failed to start server:', err);
+  process.exit(1);
 });
-

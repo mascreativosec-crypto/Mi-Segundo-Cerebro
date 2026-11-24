@@ -26,7 +26,9 @@ import {
   ScheduleSlot,
   FitnessActivityLog,
   CleaningStepItem,
-  PersonalExperiment
+  PersonalExperiment,
+  ReadingGoalState,
+  PersonalNote
 } from '../types';
 
 const STORAGE_KEY = 'msc_4_0_app_data_v1';
@@ -64,9 +66,91 @@ export interface AppStoreData {
   customRituals: CustomRitual[];
   notesReminders: NoteReminderItem[];
   personalExperiments: PersonalExperiment[];
+  readingGoal: ReadingGoalState;
+  personalNotes: PersonalNote[];
 }
 
 const getTodayDateStr = () => new Date().toISOString().split('T')[0];
+
+export const DEFAULT_EXPENSE_CATEGORIES: string[] = [
+  'Vivienda & Servicios',
+  'Alimentación & Supermercado',
+  'Transporte & Movilidad',
+  'Salud & Bienestar',
+  'Educación & Cursos',
+  'Familia & Hogar',
+  'Entretenimiento & Ocio',
+  'Suscripciones & Software',
+  'Ropa & Cuidado Personal',
+  'Viajes & Experiencias',
+  'Inversiones / Ahorro',
+  'Pago Tarjeta / Crédito',
+  'Impuestos & Trámites',
+  'Otros Gastos Personales',
+];
+
+export const DEFAULT_PERSONAL_NOTES: PersonalNote[] = [
+  {
+    id: 'pnote_new_year_2027',
+    title: 'Planificación de mi Nuevo Año 2027',
+    category: 'planificacion_anual',
+    pinned: true,
+    paperStyle: 'dotted',
+    paperTone: 'system',
+    titleSize: 'lg',
+    inkStrokes: [],
+    shapes: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    content: `# Visión y Planificación de mi Nuevo Año 2027
+
+Palabra guía del año: **CLARIDAD, DISCIPLINA Y ABUNDANCIA**.
+*Haz clic en cualquier línea para editar en tiempo real. Toca cualquier fecha azul para agendarla en tu calendario, o cualquier monto morado para registrarlo directo en tus Finanzas.*
+
+## 1. Checklist de Arranque del Año
+- [x] Definir mi __palabra guía__ y los 5 Pilares prioritarios del año
+- [ ] 01/01/2027: Ritual de arranque del año, definir las **3 metas innegociables** y limpiar mi espacio
+- [ ] 15 de enero de 2027: Revisión de presupuesto anual, suscripciones innecesarias y plan físico
+- [ ] 31 de marzo de 2027: Auditoría Q1 de mis 5 Pilares de Crecimiento y ajuste de hábitos
+- [ ] 30 de junio de 2027: Evaluación de mitad de año (salud, paz mental, relaciones y negocios)
+- [ ] 15 de septiembre de 2027: Sprint comercial y cierre estratégico del último trimestre
+- [ ] 15 de diciembre de 2027: Retiro personal de gratitud, balance anual y diseño del próximo ciclo
+
+## 2. Metas Financieras y Presupuesto
+- [ ] **Meta principal:** sostener un ingreso de $5,000 mensuales extra desde nuevas líneas de valor
+- [ ] **Regla de ahorro automático:** ahorrar $1,200 cada mes al fondo de tranquilidad y libertad
+- [ ] **Inversión mensual recurrente:** invertir $500 en activos productivos y formación de alto nivel
+- [ ] **Crecimiento personal:** gasto de $180 para libros, salud preventiva y mentoría
+- [ ] **Experiencias en familia:** presupuesto de $800 reservados para el segundo semestre
+
+## 3. Compromisos por Pilar
+- **Espiritual y Emocional:** proteger mi Súper Mañana sin teléfono los primeros __45 minutos del día__.
+- **Físico:** entrenar 4 veces por semana, dormir mínimo 7.5 horas y mantener hidratación constante.
+- **Intelectual:** leer 12 libros clave al año y documentar aprendizajes accionables en mi biblioteca.
+- **Negocios:** delegar lo operativo para enfocarme en estrategia, relaciones clave y rentabilidad.`,
+  },
+  {
+    id: 'pnote_general_capture',
+    title: 'Libreta Rápida — Ideas y Pendientes',
+    category: 'general',
+    pinned: false,
+    paperStyle: 'lined',
+    paperTone: 'system',
+    titleSize: 'md',
+    inkStrokes: [],
+    shapes: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    content: `# Notas Generales del Mes
+
+*Usa esta libreta interactiva para bajar ideas, checklists, títulos y compromisos rápidos:*
+
+- [ ] Próximo lunes: agendar __chequeo médico anual__ y exámenes de laboratorio preventivos
+- [ ] Cotizar renovación de silla ergonómica de oficina — gasto de $240 estimado
+- [ ] Cobrar consultoría pendiente — ingreso de $650 antes del fin de mes
+- **Libros por leer:** *Meditaciones*, *Essentialism* y *Deep Work*.`,
+  },
+];
 
 export const initialStoreData: AppStoreData = {
   version: '4.0.0',
@@ -619,7 +703,8 @@ export const initialStoreData: AppStoreData = {
       { id: 'tx_5', type: 'expense', category: 'Transporte & Movilidad', amount: 220, date: '2026-11-06', description: 'Combustible y mantenimiento', scope: 'personal', bankAccountId: 'ba_1' },
       { id: 'tx_6', type: 'debt_payment', category: 'Pago Tarjeta / Crédito', amount: 350, date: '2026-11-05', description: 'Abono a Tarjeta Visa Infinite', scope: 'personal', bankAccountId: 'ba_1', creditAccountId: 'ca_1' },
       { id: 'tx_7', type: 'debt_payment', category: 'Pago Tarjeta / Crédito', amount: 400, date: '2026-11-04', description: 'Abono a Cuenta Abierta de $1000', scope: 'personal', bankAccountId: 'ba_1', creditAccountId: 'ca_3' }
-    ]
+    ],
+    expenseCategories: DEFAULT_EXPENSE_CATEGORIES
   },
   capturedItems: [
     {
@@ -985,10 +1070,124 @@ export const initialStoreData: AppStoreData = {
       ],
       linkedDecisionIds: []
     }
-  ]
+  ],
+  readingGoal: {
+    dailyTargetMinutes: 15,
+    dailySecondsByDate: {},
+    annualBooksTarget: 12,
+    bestStreak: 0,
+    linkedHabitId: 'h3',
+  },
+  personalNotes: DEFAULT_PERSONAL_NOTES,
 };
 
 export class StorageService {
+  static normalizeData(parsed: any): AppStoreData {
+    if (!parsed || typeof parsed !== 'object') {
+      return initialStoreData;
+    }
+
+    const ensureArray = <T,>(val: unknown, fallback: T[], allowEmpty = true): T[] => {
+      if (!Array.isArray(val)) return fallback;
+      if (!allowEmpty && val.length === 0) return fallback;
+      return val as T[];
+    };
+
+    const parsedFinances = parsed.personalFinances && typeof parsed.personalFinances === 'object'
+      ? parsed.personalFinances
+      : {};
+
+    return {
+      ...initialStoreData,
+      ...parsed,
+      version: typeof parsed.version === 'string' ? parsed.version : initialStoreData.version,
+      lastUpdated: typeof parsed.lastUpdated === 'string' ? parsed.lastUpdated : new Date().toISOString(),
+      profile: {
+        ...initialStoreData.profile,
+        ...(parsed.profile && typeof parsed.profile === 'object' ? parsed.profile : {}),
+      },
+      pillarScores: ensureArray(parsed.pillarScores, initialStoreData.pillarScores, false),
+      habits: ensureArray(parsed.habits, initialStoreData.habits),
+      goals: ensureArray(parsed.goals, initialStoreData.goals),
+      superMorning: {
+        ...initialStoreData.superMorning,
+        ...(parsed.superMorning && typeof parsed.superMorning === 'object' ? parsed.superMorning : {}),
+        top3Priorities: ensureArray(parsed.superMorning?.top3Priorities, initialStoreData.superMorning.top3Priorities),
+        steps: ensureArray(parsed.superMorning?.steps, initialStoreData.superMorning.steps),
+      },
+      superNight: {
+        ...initialStoreData.superNight,
+        ...(parsed.superNight && typeof parsed.superNight === 'object' ? parsed.superNight : {}),
+        wins: ensureArray(parsed.superNight?.wins, initialStoreData.superNight.wins),
+        lessons: ensureArray(parsed.superNight?.lessons, initialStoreData.superNight.lessons),
+        gratitudeItems: ensureArray(parsed.superNight?.gratitudeItems, initialStoreData.superNight.gratitudeItems),
+        preparedTomorrowPriorities: ensureArray(
+          parsed.superNight?.preparedTomorrowPriorities,
+          initialStoreData.superNight.preparedTomorrowPriorities
+        ),
+      },
+      morningHistory: ensureArray(parsed.morningHistory, initialStoreData.morningHistory),
+      nightHistory: ensureArray(parsed.nightHistory, initialStoreData.nightHistory),
+      businesses: ensureArray(parsed.businesses, initialStoreData.businesses),
+      projects: ensureArray(parsed.projects, initialStoreData.projects),
+      tasks: ensureArray(parsed.tasks, initialStoreData.tasks),
+      teamMembers: ensureArray(parsed.teamMembers, initialStoreData.teamMembers),
+      strategicDecisions: ensureArray(parsed.strategicDecisions, initialStoreData.strategicDecisions),
+      books: ensureArray(parsed.books, initialStoreData.books),
+      wisdomCapsules: ensureArray(parsed.wisdomCapsules, initialStoreData.wisdomCapsules),
+      workoutRoutines: ensureArray(parsed.workoutRoutines, initialStoreData.workoutRoutines),
+      nutritionLog: {
+        ...initialStoreData.nutritionLog,
+        ...(parsed.nutritionLog && typeof parsed.nutritionLog === 'object' ? parsed.nutritionLog : {}),
+      },
+      fitnessLogs: ensureArray(parsed.fitnessLogs, initialStoreData.fitnessLogs),
+      personalFinances: {
+        ...initialStoreData.personalFinances,
+        ...parsedFinances,
+        bankAccounts: ensureArray(parsedFinances.bankAccounts, initialStoreData.personalFinances.bankAccounts, false),
+        creditAccounts: ensureArray(parsedFinances.creditAccounts, initialStoreData.personalFinances.creditAccounts),
+        transactions: ensureArray(parsedFinances.transactions, initialStoreData.personalFinances.transactions),
+        expenseCategories: ensureArray(
+          parsedFinances.expenseCategories,
+          DEFAULT_EXPENSE_CATEGORIES,
+          false
+        ),
+      },
+      capturedItems: ensureArray(parsed.capturedItems, initialStoreData.capturedItems),
+      notifications: ensureArray(parsed.notifications, initialStoreData.notifications),
+      scheduleSlots: ensureArray(parsed.scheduleSlots, initialStoreData.scheduleSlots, false),
+      automations: ensureArray(parsed.automations, initialStoreData.automations),
+      moodEntries: ensureArray(parsed.moodEntries, initialStoreData.moodEntries),
+      spiritualEntries: ensureArray(parsed.spiritualEntries, initialStoreData.spiritualEntries),
+      personalLogs: ensureArray(parsed.personalLogs, initialStoreData.personalLogs),
+      cleaningSteps: ensureArray(parsed.cleaningSteps, initialStoreData.cleaningSteps, false),
+      customRituals: ensureArray(parsed.customRituals, initialStoreData.customRituals),
+      notesReminders: ensureArray(parsed.notesReminders, initialStoreData.notesReminders),
+      personalExperiments: ensureArray(parsed.personalExperiments, initialStoreData.personalExperiments, false),
+      readingGoal: {
+        ...initialStoreData.readingGoal,
+        ...(parsed.readingGoal && typeof parsed.readingGoal === 'object' ? parsed.readingGoal : {}),
+        dailySecondsByDate:
+          parsed.readingGoal?.dailySecondsByDate && typeof parsed.readingGoal.dailySecondsByDate === 'object'
+            ? parsed.readingGoal.dailySecondsByDate
+            : {},
+      },
+      personalNotes: ensureArray(parsed.personalNotes, initialStoreData.personalNotes, false).map(
+        (note) => {
+          if (
+            note.id === 'pnote_new_year_2027' &&
+            typeof note.content === 'string' &&
+            note.content.includes('## 1. Hitos Clave y Calendario del Año') &&
+            !note.content.includes('- [ ]')
+          ) {
+            return { ...note, content: DEFAULT_PERSONAL_NOTES[0].content };
+          }
+          return note;
+        }
+      ),
+    };
+  }
+
   static load(): AppStoreData {
     try {
       const serialized = localStorage.getItem(STORAGE_KEY);
@@ -997,37 +1196,7 @@ export class StorageService {
         return initialStoreData;
       }
       const parsed = JSON.parse(serialized);
-      // Ensure merged with current keys if updated
-      const merged: AppStoreData = {
-        ...initialStoreData,
-        ...parsed,
-        personalFinances: {
-          ...initialStoreData.personalFinances,
-          ...(parsed.personalFinances || {}),
-          bankAccounts: parsed.personalFinances?.bankAccounts?.length
-            ? parsed.personalFinances.bankAccounts
-            : initialStoreData.personalFinances.bankAccounts,
-          creditAccounts: parsed.personalFinances?.creditAccounts?.length
-            ? parsed.personalFinances.creditAccounts
-            : initialStoreData.personalFinances.creditAccounts,
-        },
-        fitnessLogs: Array.isArray(parsed.fitnessLogs)
-          ? parsed.fitnessLogs
-          : initialStoreData.fitnessLogs,
-        scheduleSlots: Array.isArray(parsed.scheduleSlots) && parsed.scheduleSlots.length > 0
-          ? parsed.scheduleSlots
-          : initialStoreData.scheduleSlots,
-        cleaningSteps: Array.isArray(parsed.cleaningSteps) && parsed.cleaningSteps.length > 0
-          ? parsed.cleaningSteps
-          : initialStoreData.cleaningSteps,
-        notesReminders: Array.isArray(parsed.notesReminders)
-          ? parsed.notesReminders
-          : initialStoreData.notesReminders,
-        personalExperiments: Array.isArray(parsed.personalExperiments) && parsed.personalExperiments.length > 0
-          ? parsed.personalExperiments
-          : initialStoreData.personalExperiments,
-      };
-      return merged;
+      return this.normalizeData(parsed);
     } catch (err) {
       console.warn('Error loading from localStorage, using initial data:', err);
       return initialStoreData;
@@ -1061,11 +1230,12 @@ export class StorageService {
         try {
           const content = e.target?.result as string;
           const parsed = JSON.parse(content);
-          if (!parsed.profile || !parsed.pillarScores) {
+          if (!parsed || typeof parsed !== 'object' || (!parsed.profile && !parsed.pillarScores && !parsed.tasks)) {
             throw new Error('Archivo de respaldo no válido para Mi Segundo Cerebro 4.0');
           }
-          this.save(parsed);
-          resolve(parsed);
+          const normalized = this.normalizeData(parsed);
+          this.save(normalized);
+          resolve(normalized);
         } catch (err) {
           reject(err);
         }

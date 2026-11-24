@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppStoreData } from '../../services/storage';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import { SpiritualJournalEntry } from '../../types';
 import {
   Compass,
@@ -117,6 +118,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
     reflection: string;
     prayer: string;
   } | null>(null);
+  const [aiGuideError, setAiGuideError] = useState<string | null>(null);
   const [newPurposeReflection, setNewPurposeReflection] = useState('');
   const [newGratitudeItem, setNewGratitudeItem] = useState('');
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
@@ -124,21 +126,31 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
   const handleGenerateAiSpiritualGuide = async (tradition: 'catolica' | 'general') => {
     setAiGuideTradition(tradition);
     setAiGuideLoading(true);
+    setAiGuideError(null);
     try {
-      const res = await fetch('/api/gemini/spiritual-guide', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tradition,
-          theme: spiritualFilter,
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.guide) setAiGuideResult(json.guide);
+      const { ok, status, data: json } = await fetchJsonWithTimeout<{ guide?: any; error?: string }>(
+        '/api/gemini/spiritual-guide',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tradition,
+            theme: spiritualFilter,
+          }),
+        }
+      );
+      if (!ok) {
+        throw new Error(json.error || `Error del servidor (${status}) al generar la guía espiritual.`);
       }
-    } catch {
-      // ignore transient errors
+      if (json.guide) {
+        setAiGuideResult(json.guide);
+      } else {
+        throw new Error('La IA no devolvió contenido para esta guía espiritual.');
+      }
+    } catch (err: unknown) {
+      setAiGuideError(
+        err instanceof Error ? err.message : 'No se pudo conectar con el asistente espiritual IA.'
+      );
     } finally {
       setAiGuideLoading(false);
     }
@@ -192,7 +204,7 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
                 Dimensión Espiritual
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Fe católica, Lectio Divina, quietud consciente (Isra García), propósito rector y diario de oración.
+                Fe católica, Lectio Divina, quietud consciente (Isra García) y diario de oración.
               </p>
             </div>
           </div>
@@ -207,19 +219,6 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      {/* Declaration of Purpose Card */}
-      <div className="p-6 sm:p-7 rounded-3xl backdrop-blur-2xl bg-gradient-to-br from-purple-500/10 via-white/85 to-indigo-500/5 dark:from-purple-950/20 dark:via-slate-900/60 dark:to-indigo-950/20 border border-purple-500/25 shadow-lg space-y-3">
-        <div className="flex items-center gap-2">
-          <Compass className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-          <h2 className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
-            Propósito Rector de Vida
-          </h2>
-        </div>
-        <p className="text-base sm:text-lg text-slate-800 dark:text-slate-100 font-medium italic leading-relaxed">
-          "Construir organizaciones prósperas, conscientes y humanas que eleven la calidad de vida de las personas que colaboran en ellas, manteniendo un equilibrio innegociable con mi salud, mi familia y mi verdad espiritual."
-        </p>
       </div>
 
       {/* Lectio Divina & Versículos Bíblicos Católicos + Guía IA */}
@@ -313,6 +312,12 @@ export const SpiritualView: React.FC<SpiritualViewProps> = ({
             <span>Guía Contemplativa / Quietud IA</span>
           </button>
         </div>
+
+        {aiGuideError && (
+          <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            {aiGuideError}
+          </div>
+        )}
 
         {aiGuideResult && (
           <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 space-y-2">

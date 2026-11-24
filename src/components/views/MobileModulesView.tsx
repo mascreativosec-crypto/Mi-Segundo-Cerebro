@@ -1,21 +1,25 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Search, X, Download, Upload, LayoutGrid } from 'lucide-react';
+import { Search, X, Download, Upload, LayoutGrid, LogOut } from 'lucide-react';
 import { NAV_SECTIONS } from '../layout/navConfig';
 
 interface MobileModulesViewProps {
   lastModuleView: string;
   onSelectModule: (viewId: string) => void;
   userName: string;
+  userAvatar?: string;
   onExportBackup: () => void;
   onImportBackup: (file: File) => void;
+  onLogout?: () => void;
 }
 
 export const MobileModulesView: React.FC<MobileModulesViewProps> = ({
   lastModuleView,
   onSelectModule,
   userName,
+  userAvatar,
   onExportBackup,
   onImportBackup,
+  onLogout,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,9 +55,17 @@ export const MobileModulesView: React.FC<MobileModulesViewProps> = ({
       <div className="p-3.5 rounded-2xl backdrop-blur-2xl bg-white/85 dark:bg-slate-900/65 border border-slate-200/80 dark:border-white/[0.08] shadow-sm space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
-              <LayoutGrid className="w-4.5 h-4.5" />
-            </div>
+            {userAvatar ? (
+              <img
+                src={userAvatar}
+                alt={userName}
+                className="w-9 h-9 rounded-full object-cover border border-slate-300/80 dark:border-white/15 shadow-md shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
+                <LayoutGrid className="w-4.5 h-4.5" />
+              </div>
+            )}
             <div className="min-w-0">
               <h1 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
                 Todos los Módulos
@@ -90,6 +102,17 @@ export const MobileModulesView: React.FC<MobileModulesViewProps> = ({
               onChange={handleFileChange}
               className="hidden"
             />
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-white/[0.05] hover:text-rose-500 hover:bg-slate-200/80 dark:hover:bg-white/[0.1] cursor-pointer"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 

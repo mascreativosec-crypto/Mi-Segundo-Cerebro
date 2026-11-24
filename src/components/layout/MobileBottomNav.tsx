@@ -1,30 +1,31 @@
 import React from 'react';
-import { Compass, TrendingUp, Plus, CheckSquare, LayoutGrid } from 'lucide-react';
+import { Compass, TrendingUp, Bot, CheckSquare, LayoutGrid } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeView: string;
   onNavigate: (view: string) => void;
-  onOpenQuickActionSheet: () => void;
+  onOpenQuickActionSheet?: () => void;
   onOpenModulesMenu: () => void;
-  isQuickActionOpen: boolean;
+  isQuickActionOpen?: boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeView,
   onNavigate,
-  onOpenQuickActionSheet,
   onOpenModulesMenu,
-  isQuickActionOpen,
+  isQuickActionOpen = false,
 }) => {
   const isMiDiaActive = activeView === 'mi_dia' && !isQuickActionOpen;
   const isPilaresActive = activeView === 'personal_dashboard' && !isQuickActionOpen;
   const isTasksActive = activeView === 'tasks_general' && !isQuickActionOpen;
+  const isAiAssistantActive = activeView === 'ai_assistant' && !isQuickActionOpen;
   const isOtherModuleActive =
     !isQuickActionOpen &&
     (activeView === 'mobile_modules' ||
       (activeView !== 'mi_dia' &&
         activeView !== 'personal_dashboard' &&
-        activeView !== 'tasks_general'));
+        activeView !== 'tasks_general' &&
+        activeView !== 'ai_assistant'));
 
   return (
     <nav
@@ -103,20 +104,20 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           </span>
         </button>
 
-        {/* 5. Quick Strategic Meeting / Capture (+) */}
+        {/* 5. Asistente IA del Sistema */}
         <button
           type="button"
-          onClick={onOpenQuickActionSheet}
-          aria-label="Grabar junta estratégica o captura rápida"
+          onClick={() => onNavigate('ai_assistant')}
+          aria-label="Asistente IA del Sistema"
           className={`flex flex-col items-center justify-center min-h-[44px] py-1 rounded-xl transition-colors cursor-pointer active:scale-95 ${
-            isQuickActionOpen
-              ? 'text-rose-600 dark:text-rose-400'
+            isAiAssistantActive
+              ? 'text-cyan-600 dark:text-cyan-400'
               : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Plus className="w-5 h-5 stroke-[2.4]" />
+          <Bot className={`w-5 h-5 ${isAiAssistantActive ? 'stroke-[2.4]' : 'stroke-[1.9]'}`} />
           <span className="text-[10px] font-semibold tracking-tight mt-0.5 whitespace-nowrap">
-            Junta / +
+            Asistente IA
           </span>
         </button>
       </div>

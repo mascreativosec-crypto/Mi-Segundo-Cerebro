@@ -7,6 +7,7 @@ import {
   PersonalExperiment,
   PillarKey,
 } from '../../types';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   FlaskConical,
   Plus,
@@ -35,11 +36,13 @@ import {
   Upload,
   FileText,
 } from 'lucide-react';
+import { LinkedNotesPanel } from '../shared/LinkedNotesPanel';
 
 interface PersonalExperimentsViewProps {
   data: AppStoreData;
   onUpdateData: (updater: (prev: AppStoreData) => AppStoreData) => void;
   onNavigate: (view: string) => void;
+  onOpenPersonalNote?: (noteId: string) => void;
 }
 
 type ExpColorKey = NonNullable<PersonalExperiment['inspirationColor']>;
@@ -183,6 +186,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
   data,
   onUpdateData,
   onNavigate,
+  onOpenPersonalNote,
 }) => {
   const experiments = data.personalExperiments || [];
   const [selectedExpId, setSelectedExpId] = useState<string>(experiments[0]?.id || '');
@@ -192,7 +196,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
   // Create Experiment State
   const [newTitle, setNewTitle] = useState('');
   const [newInspiration, setNewInspiration] = useState<string>('Isra García');
-  const [newInspirationColor, setNewInspirationColor] = useState<ExpColorKey>('fuchsia');
+  const [newInspirationColor, setNewInspirationColor] = useState<ExpColorKey>('cyan');
   const [newPillar, setNewPillar] = useState<PillarKey>('fisico');
   const [newGoalDescription, setNewGoalDescription] = useState('');
   const [newHypothesis, setNewHypothesis] = useState('');
@@ -217,7 +221,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
   const [isEditingExp, setIsEditingExp] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editInspiration, setEditInspiration] = useState('');
-  const [editInspirationColor, setEditInspirationColor] = useState<ExpColorKey>('fuchsia');
+  const [editInspirationColor, setEditInspirationColor] = useState<ExpColorKey>('cyan');
   const [editPillar, setEditPillar] = useState<PillarKey>('fisico');
   const [editGoalDescription, setEditGoalDescription] = useState('');
   const [editHypothesis, setEditHypothesis] = useState('');
@@ -282,7 +286,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
 
   const activeExp =
     experiments.find((e) => e.id === selectedExpId) || experiments[0] || null;
-  const activeColor = EXP_COLOR_MAP[activeExp?.inspirationColor || 'fuchsia'];
+  const activeColor = EXP_COLOR_MAP[activeExp?.inspirationColor || 'cyan'];
 
   const linkedMentorNotes = useMemo(() => {
     if (!activeExp) return [];
@@ -415,7 +419,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
     if (!activeExp) return;
     setEditTitle(activeExp.title);
     setEditInspiration(activeExp.inspiration);
-    setEditInspirationColor(activeExp.inspirationColor || 'fuchsia');
+    setEditInspirationColor(activeExp.inspirationColor || 'cyan');
     setEditPillar(activeExp.pillar || 'fisico');
     setEditGoalDescription(activeExp.goalDescription || '');
     setEditHypothesis(activeExp.hypothesis);
@@ -632,22 +636,25 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
     if (!activeExp) return;
     setIsLoadingCoach(true);
     try {
-      const resp = await fetch('/api/gemini/experiment-coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          experiment: activeExp,
-          linkedNotes: linkedMentorNotes.map((n) => ({
-            title: n.title,
-            date: n.date,
-            decision: n.decision,
-            keyPoints: n.keyPoints,
-          })),
-          question: coachQuestion.trim() || undefined,
-        }),
-      });
-      const result = await resp.json();
-      if (result.feedback) {
+      const { ok, data: result } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/experiment-coach',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            experiment: activeExp,
+            linkedNotes: linkedMentorNotes.map((n) => ({
+              title: n.title,
+              date: n.date,
+              decision: n.decision,
+              keyPoints: n.keyPoints,
+            })),
+            question: coachQuestion.trim() || undefined,
+          }),
+        },
+        60000
+      );
+      if (ok && result.feedback) {
         onUpdateData((prev) => ({
           ...prev,
           personalExperiments: (prev.personalExperiments || []).map((ex) =>
@@ -686,16 +693,19 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
     setIsConvertingTemplate(true);
     setTemplateError(null);
     try {
-      const resp = await fetch('/api/gemini/experiment-from-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateText: templateInputText.trim(),
-          customTitle: templateCustomTitle.trim() || undefined,
-        }),
-      });
-      const result = await resp.json();
-      if (!resp.ok || !result.experimentDraft) {
+      const { ok, data: result } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/experiment-from-template',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            templateText: templateInputText.trim(),
+            customTitle: templateCustomTitle.trim() || undefined,
+          }),
+        },
+        60000
+      );
+      if (!ok || !result.experimentDraft) {
         setTemplateError(result.error || 'No se pudo convertir la plantilla.');
       } else {
         setTemplateDraftPreview(result.experimentDraft);
@@ -713,7 +723,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
       id: `exp_${Date.now()}`,
       title: templateDraftPreview.title,
       inspiration: templateDraftPreview.inspiration || 'Coach IA',
-      inspirationColor: templateDraftPreview.inspirationColor || 'fuchsia',
+      inspirationColor: templateDraftPreview.inspirationColor || 'cyan',
       pillar: templateDraftPreview.pillar || 'fisico',
       goalDescription: templateDraftPreview.goalDescription || undefined,
       hypothesis: templateDraftPreview.hypothesis || 'Validar impacto práctico de esta plantilla.',
@@ -742,7 +752,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
     if (!templateDraftPreview) return;
     setNewTitle(templateDraftPreview.title);
     setNewInspiration(templateDraftPreview.inspiration || 'Coach IA');
-    setNewInspirationColor(templateDraftPreview.inspirationColor || 'fuchsia');
+    setNewInspirationColor(templateDraftPreview.inspirationColor || 'cyan');
     setNewPillar(templateDraftPreview.pillar || 'fisico');
     setNewGoalDescription(templateDraftPreview.goalDescription || '');
     setNewHypothesis(templateDraftPreview.hypothesis || '');
@@ -760,7 +770,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
       <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-fuchsia-600 via-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-fuchsia-600/25 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-500 via-teal-600 to-cyan-600 flex items-center justify-center text-white shadow-lg shadow-teal-600/25 shrink-0">
               <FlaskConical className="w-6 h-6 stroke-[2.2]" />
             </div>
             <div>
@@ -776,17 +786,17 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => onNavigate('strategy')}
-              className="px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-white/[0.06] hover:bg-fuchsia-500/15 border border-slate-200/80 dark:border-white/[0.08] text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              onClick={() => onNavigate('personal_notes')}
+              className="px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-white/[0.06] hover:bg-teal-500/15 border border-slate-200/80 dark:border-white/[0.08] text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
             >
-              <Mic className="w-3.5 h-3.5 text-fuchsia-500" />
+              <Mic className="w-3.5 h-3.5 text-teal-500" />
               <span>Subir Audio de Mentoría</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={() => setShowCreateForm((prev) => !prev)}
-              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-fuchsia-600/20 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg shadow-teal-600/20 flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Nuevo Experimento</span>
@@ -799,7 +809,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
       {showCreateForm && (
         <form
           onSubmit={handleCreateExperiment}
-          className="p-6 rounded-3xl backdrop-blur-2xl bg-white/85 dark:bg-slate-900/80 border border-fuchsia-500/35 shadow-xl space-y-4"
+          className="p-6 rounded-3xl backdrop-blur-2xl bg-white/85 dark:bg-slate-900/80 border border-teal-500/35 shadow-xl space-y-4"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -811,7 +821,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                   key={preset.label}
                   type="button"
                   onClick={() => applyPreset(preset)}
-                  className="px-3 py-1.5 rounded-xl bg-fuchsia-500/10 hover:bg-fuchsia-500/20 border border-fuchsia-500/25 text-[11px] font-bold text-fuchsia-700 dark:text-fuchsia-300 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/25 text-[11px] font-bold text-teal-700 dark:text-teal-300 cursor-pointer"
                 >
                   {preset.label}
                 </button>
@@ -871,7 +881,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     onClick={() => setNewInspiration(chip)}
                     className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer border ${
                       newInspiration === chip
-                        ? 'bg-fuchsia-600 text-white border-fuchsia-600'
+                        ? 'bg-teal-600 text-white border-teal-600'
                         : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10'
                     }`}
                   >
@@ -995,7 +1005,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                   key={fld.id}
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-xs"
                 >
-                  <span className="text-[10px] font-bold uppercase text-fuchsia-600 dark:text-fuchsia-400">
+                  <span className="text-[10px] font-bold uppercase text-teal-600 dark:text-teal-400">
                     {fld.type === 'percent_10'
                       ? '0-100%'
                       : fld.type === 'timer_minutes'
@@ -1057,7 +1067,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                 <button
                   type="button"
                   onClick={handleAddDraftField}
-                  className="flex-1 px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-fuchsia-500/20 text-xs font-bold cursor-pointer"
+                  className="flex-1 px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-teal-500/20 text-xs font-bold cursor-pointer"
                 >
                   + Campo
                 </button>
@@ -1075,7 +1085,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-xs font-bold cursor-pointer"
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white text-xs font-bold cursor-pointer"
             >
               Iniciar Experimento
             </button>
@@ -1088,7 +1098,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
         {experiments.map((exp) => {
           const isSelected = activeExp?.id === exp.id;
           const pct = Math.min(100, Math.round((exp.logs.length / Math.max(1, exp.durationDays)) * 100));
-          const col = EXP_COLOR_MAP[exp.inspirationColor || 'fuchsia'];
+          const col = EXP_COLOR_MAP[exp.inspirationColor || 'cyan'];
           return (
             <div
               key={exp.id}
@@ -1099,7 +1109,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
               className={`p-5 rounded-3xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 ${
                 isSelected
                   ? `${col.selectedCard} shadow-lg`
-                  : 'bg-white/75 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] hover:border-fuchsia-400/40'
+                  : 'bg-white/75 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/[0.08] hover:border-teal-400/40'
               }`}
             >
               <div>
@@ -1182,7 +1192,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                       <button
                         type="button"
                         onClick={openEditActiveExp}
-                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-fuchsia-500/15 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/[0.06] hover:bg-teal-500/15 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer"
                       >
                         <Edit3 className="w-3 h-3" />
                         <span>Editar Detalles</span>
@@ -1335,10 +1345,10 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
             </div>
 
             {/* Coach IA de Experimentos (Isra García + Diego Dreyfus + Conversor de Plantillas) */}
-            <div className="lg:col-span-5 p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-fuchsia-500/25 shadow-lg space-y-3">
+            <div className="lg:col-span-5 p-6 rounded-3xl backdrop-blur-2xl bg-white/80 dark:bg-slate-900/60 border border-teal-500/25 shadow-lg space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-fuchsia-500" />
+                  <Sparkles className="w-4 h-4 text-teal-500" />
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                     Coach IA de Experimentos
                   </h3>
@@ -1349,7 +1359,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     onClick={() => setCoachMode('analyze')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
                       coachMode === 'analyze'
-                        ? 'bg-white dark:bg-slate-800 text-fuchsia-700 dark:text-fuchsia-300 shadow-2xs'
+                        ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                     }`}
                   >
@@ -1360,7 +1370,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     onClick={() => setCoachMode('template')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
                       coachMode === 'template'
-                        ? 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white shadow-2xs'
+                        ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                     }`}
                   >
@@ -1376,7 +1386,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                       type="button"
                       disabled={isLoadingCoach}
                       onClick={() => handleRunAiCoach()}
-                      className="px-3 py-1.5 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-700 dark:text-fuchsia-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 text-[11px] font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3 h-3 ${isLoadingCoach ? 'animate-spin' : ''}`} />
                       <span>{isLoadingCoach ? 'Analizando...' : 'Analizar Comparativa'}</span>
@@ -1399,7 +1409,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     <button
                       type="submit"
                       disabled={isLoadingCoach}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 text-white text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -1420,8 +1430,8 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                         placeholder="Título opcional del experimento..."
                         className="flex-1 bg-slate-100/80 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white"
                       />
-                      <label className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/[0.08] border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer hover:border-fuchsia-400 shrink-0">
-                        <Upload className="w-3 h-3 text-fuchsia-500" />
+                      <label className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-white/[0.08] border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1 cursor-pointer hover:border-teal-400 shrink-0">
+                        <Upload className="w-3 h-3 text-teal-500" />
                         <span>Cargar Archivo</span>
                         <input
                           type="file"
@@ -1450,7 +1460,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     <button
                       type="submit"
                       disabled={isConvertingTemplate || !templateInputText.trim()}
-                      className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
+                      className="w-full py-2 px-3.5 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50"
                     >
                       {isConvertingTemplate ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1464,12 +1474,12 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                   </form>
 
                   {templateDraftPreview && (
-                    <div className="p-3 rounded-2xl bg-fuchsia-500/10 border border-fuchsia-500/30 space-y-2">
+                    <div className="p-3 rounded-2xl bg-teal-500/10 border border-teal-500/30 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-extrabold text-fuchsia-800 dark:text-fuchsia-200">
+                        <span className="text-xs font-extrabold text-teal-800 dark:text-teal-200">
                           {templateDraftPreview.title}
                         </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 text-fuchsia-700 dark:text-fuchsia-300">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white/80 dark:bg-black/40 text-teal-700 dark:text-teal-300">
                           {templateDraftPreview.durationDays} días · {PILLAR_LABELS[templateDraftPreview.pillar]}
                         </span>
                       </div>
@@ -1480,7 +1490,7 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                         <button
                           type="button"
                           onClick={handleActivateTemplateExperiment}
-                          className="flex-1 py-1.5 px-3 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-[11px] font-bold cursor-pointer"
+                          className="flex-1 py-1.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold cursor-pointer"
                         >
                           Crear y Activar Experimento
                         </button>
@@ -1498,6 +1508,16 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
               )}
             </div>
           </div>
+
+          {/* Linked Notes for Active Experiment */}
+          <LinkedNotesPanel
+            entityType="experiment"
+            entityId={activeExp.id}
+            entityLabel={activeExp.title}
+            data={data}
+            onUpdateData={onUpdateData}
+            onOpenNote={onOpenPersonalNote}
+          />
 
           {/* SUB-TAB 1: REGISTROS DEL EXPERIMENTO */}
           {activeTab === 'log' && (
@@ -2216,22 +2236,22 @@ export const PersonalExperimentsView: React.FC<PersonalExperimentsViewProps> = (
                     Notas de Mentorías &amp; Audios Vinculados ({linkedMentorNotes.length})
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Todos los audios o notas etiquetados como &quot;Personal&quot; en Dirección &amp; Estrategia y enviados a este experimento aparecen aquí.
+                    Todos los audios o bitácoras etiquetados como &quot;Personal&quot; en Notas Generales y vinculados a este experimento aparecen aquí.
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => onNavigate('strategy')}
+                  onClick={() => onNavigate('personal_notes')}
                   className="px-3.5 py-2 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-700 dark:text-fuchsia-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
                   <Mic className="w-3.5 h-3.5" />
-                  <span>Procesar Nuevo Audio en Estrategia</span>
+                  <span>Procesar Nuevo Audio en Notas</span>
                 </button>
               </div>
 
               {linkedMentorNotes.length === 0 ? (
                 <div className="py-10 text-center border border-dashed border-slate-300 dark:border-white/10 rounded-2xl text-xs text-slate-500 dark:text-slate-400">
-                  No hay notas de mentoría vinculadas aún. En Dirección &amp; Estrategia etiqueta un audio o nota como &quot;Personal&quot; y selecciona este experimento.
+                  No hay notas de mentoría vinculadas aún. En Notas Generales procesa una reunión o audio, etiquétalo como &quot;Personal&quot; y vincúlalo a este experimento.
                 </div>
               ) : (
                 <div className="space-y-3">

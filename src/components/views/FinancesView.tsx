@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { AppStoreData } from '../../services/storage';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppStoreData, DEFAULT_EXPENSE_CATEGORIES } from '../../services/storage';
 import { BankAccount, CreditAccount, CreditPayment, FinancialTransaction } from '../../types';
 import {
   DollarSign,
   TrendingUp,
   CreditCard,
-  Building,
   Plus,
   ArrowDownRight,
   ArrowUpRight,
-  Calendar,
   Wallet,
   PieChart,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  ArrowRight
+  Tag,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 interface FinancesViewProps {
@@ -71,7 +68,23 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
   const [bankBalance, setBankBalance] = useState<number>(2000);
   const [bankInstitution, setBankInstitution] = useState('Banco Pichincha');
 
+  // Custom expense category creation state
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [showInlineTxCategory, setShowInlineTxCategory] = useState(false);
+  const [inlineTxCategoryName, setInlineTxCategoryName] = useState('');
+
   const personal = data.personalFinances;
+
+  // Persisted base + custom categories (default basic categories included out of the box)
+  const storedCategories = useMemo(() => {
+    const base =
+      personal.expenseCategories && personal.expenseCategories.length > 0
+        ? personal.expenseCategories
+        : DEFAULT_EXPENSE_CATEGORIES;
+    return base;
+  }, [personal.expenseCategories]);
 
   // Calculate totals
   const totalBankLiquidity = personal.bankAccounts.reduce((acc, b) => acc + (b.currentBalance || 0), 0);
@@ -86,20 +99,92 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
     categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + tx.amount;
   });
 
+  // Combine persisted categories + any categories already present in historical transactions
+  const categoriesList = useMemo(() => {
+    const merged = [...storedCategories];
+    Object.keys(categoryTotals).forEach((cat) => {
+      if (!merged.some((existing) => existing.toLowerCase() === cat.toLowerCase())) {
+        merged.push(cat);
+      }
+    });
+    return merged;
+  }, [storedCategories, categoryTotals]);
+
+  // All categories sorted by spend descending (keeping $0 categories visible so user sees defaults & custom ones)
+  const allCategoriesDistribution = useMemo(() => {
+    return categoriesList
+      .map((category) => ({
+        category,
+        amount: categoryTotals[category] || 0,
+        isCustom: !DEFAULT_EXPENSE_CATEGORIES.some(
+          (def) => def.toLowerCase() === category.toLowerCase()
+        ),
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [categoriesList, categoryTotals]);
+
   const categoriesSorted = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
 
-  const categoriesList = [
-    'Vivienda & Servicios',
-    'Alimentación & Supermercado',
-    'Transporte & Movilidad',
-    'Salud & Bienestar',
-    'Educación & Cursos',
-    'Entretenimiento & Ocio',
-    'Suscripciones & Software',
-    'Inversiones / Ahorro',
-    'Pago Tarjeta / Crédito',
-    'Otros Gastos Personales'
-  ];
+  const handleCreateExpenseCategory = (rawName: string, selectInTxModal = false): boolean => {
+    const trimmed = rawName.trim();
+    if (!trimmed) {
+      setCategoryError('Escribe un nombre para la categoría.');
+      return false;
+    }
+    const alreadyExists = categoriesList.some(
+      (c) => c.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (alreadyExists) {
+      setCategoryError('Esa categoría ya existe en tu distribución de gastos.');
+      return false;
+    }
+
+    onUpdateData((prev) => {
+      const current =
+        prev.personalFinances.expenseCategories && prev.personalFinances.expenseCategories.length > 0
+          ? prev.personalFinances.expenseCategories
+          : DEFAULT_EXPENSE_CATEGORIES;
+      return {
+        ...prev,
+        personalFinances: {
+          ...prev.personalFinances,
+          expenseCategories: [...current, trimmed],
+        },
+      };
+    });
+
+    if (selectInTxModal) {
+      setTxCategory(trimmed);
+    }
+    setCategoryError(null);
+    return true;
+  };
+
+  const handleDeleteExpenseCategory = (categoryName: string) => {
+    onUpdateData((prev) => {
+      const current =
+        prev.personalFinances.expenseCategories && prev.personalFinances.expenseCategories.length > 0
+          ? prev.personalFinances.expenseCategories
+          : DEFAULT_EXPENSE_CATEGORIES;
+      const next = current.filter((c) => c !== categoryName);
+      return {
+        ...prev,
+        personalFinances: {
+          ...prev.personalFinances,
+          expenseCategories: next.length > 0 ? next : DEFAULT_EXPENSE_CATEGORIES,
+        },
+      };
+    });
+    if (txCategory === categoryName) {
+      setTxCategory(DEFAULT_EXPENSE_CATEGORIES[0]);
+    }
+  };
+
+  const handleQuickAddExpenseForCategory = (categoryName: string) => {
+    setTxType('expense');
+    setTxCategory(categoryName);
+    setShowAddTx(true);
+  };
 
   // Handlers
   const handleAddTransaction = (e: React.FormEvent) => {
@@ -615,31 +700,153 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
       {/* TAB 4: DISTRIBUCIÓN */}
       {activeTab === 'distribucion' && (
         <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl space-y-5">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-emerald-500" />
-              ¿En qué se fue mi dinero? (Desglose por Categoría)
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Análisis exacto de cada salida de capital para erradicar fugas financieras.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-emerald-500" />
+                ¿En qué se fue mi dinero? (Desglose por Categoría)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Incluye categorías básicas listas para usar y te permite crear nuevas categorías personalizadas según tus gastos.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddCategory((prev) => !prev);
+                setCategoryError(null);
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nueva Categoría</span>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Inline Create New Category Form */}
+          {showAddCategory && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (handleCreateExpenseCategory(newCategoryName)) {
+                  setNewCategoryName('');
+                  setShowAddCategory(false);
+                }
+              }}
+              className="p-4 rounded-2xl bg-emerald-500/[0.07] dark:bg-emerald-500/[0.08] border border-emerald-500/25 space-y-2.5"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" />
+                  Crear nueva categoría de gastos
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddCategory(false);
+                    setCategoryError(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-800 dark:hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => {
+                    setNewCategoryName(e.target.value);
+                    if (categoryError) setCategoryError(null);
+                  }}
+                  placeholder="Ej: Mascotas, Regalos, Gimnasio, Donaciones, Mantenimiento..."
+                  className="flex-1 bg-white/90 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer shrink-0"
+                >
+                  Guardar Categoría
+                </button>
+              </div>
+              {categoryError && (
+                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                  {categoryError}
+                </p>
+              )}
+            </form>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div className="space-y-3">
-              {categoriesSorted.map(([category, amount]) => {
+              {allCategoriesDistribution.map(({ category, amount, isCustom }) => {
                 const percent = totalExpenses > 0 ? Math.round((amount / totalExpenses) * 100) : 0;
+                const hasSpend = amount > 0;
                 return (
-                  <div key={category} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-700 dark:text-slate-300 font-medium">{category}</span>
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                        ${amount.toLocaleString()} ({percent}%)
-                      </span>
+                  <div
+                    key={category}
+                    className={`p-3 rounded-2xl border transition-colors space-y-1.5 ${
+                      hasSpend
+                        ? 'bg-slate-50/90 dark:bg-black/30 border-slate-200/80 dark:border-white/[0.06]'
+                        : 'bg-slate-50/50 dark:bg-black/15 border-slate-200/60 dark:border-white/[0.04]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={`truncate ${
+                            hasSpend
+                              ? 'text-slate-800 dark:text-slate-200 font-semibold'
+                              : 'text-slate-500 dark:text-slate-400 font-medium'
+                          }`}
+                        >
+                          {category}
+                        </span>
+                        {isCustom && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 shrink-0">
+                            Propia
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`font-bold tabular-nums ${
+                            hasSpend
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-slate-400 dark:text-slate-500'
+                          }`}
+                        >
+                          ${amount.toLocaleString()} ({percent}%)
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleQuickAddExpenseForCategory(category)}
+                          title={`Registrar gasto en ${category}`}
+                          className="px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          + Gasto
+                        </button>
+
+                        {!hasSpend && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExpenseCategory(category)}
+                            title={`Eliminar categoría ${category}`}
+                            className="p-1 text-slate-400 hover:text-rose-500 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
+
                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full"
+                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-300"
                         style={{ width: `${percent}%` }}
                       />
                     </div>
@@ -648,19 +855,36 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               })}
             </div>
 
-            <div className="p-5 rounded-3xl bg-slate-50/90 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] space-y-3 flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold text-slate-900 dark:text-white block mb-1">Diagnóstico Financiero Personal</span>
+            <div className="p-5 rounded-3xl bg-slate-50/90 dark:bg-black/30 border border-slate-200/80 dark:border-white/[0.06] space-y-4 flex flex-col justify-between">
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                  Diagnóstico Financiero Personal
+                </span>
                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Tus mayores gastos se concentran en <strong className="text-emerald-600 dark:text-emerald-400">{categoriesSorted[0]?.[0] || 'Vivienda'}</strong> y <strong className="text-emerald-600 dark:text-emerald-400">{categoriesSorted[1]?.[0] || 'Alimentación'}</strong>.
-                  La amortización constante de deudas acelera tu libertad patrimonial.
+                  Tus mayores gastos se concentran en{' '}
+                  <strong className="text-emerald-600 dark:text-emerald-400">
+                    {categoriesSorted[0]?.[0] || 'Vivienda & Servicios'}
+                  </strong>{' '}
+                  y{' '}
+                  <strong className="text-emerald-600 dark:text-emerald-400">
+                    {categoriesSorted[1]?.[0] || 'Alimentación & Supermercado'}
+                  </strong>
+                  . La amortización constante de deudas acelera tu libertad patrimonial.
                 </p>
               </div>
 
               <div className="pt-3 border-t border-slate-200/80 dark:border-white/[0.06] text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
                 <div className="flex justify-between">
+                  <span>Categorías activas:</span>
+                  <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                    {allCategoriesDistribution.length} ({allCategoriesDistribution.filter((c) => c.amount > 0).length} con movimientos)
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span>Total Gastos & Salidas:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">${totalExpenses.toLocaleString()}</span>
+                  <span className="font-bold text-slate-900 dark:text-white tabular-nums">
+                    ${totalExpenses.toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Capacidad de Ahorro / Inversión:</span>
@@ -953,7 +1177,21 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 block mb-1">Categoría</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                    Categoría
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInlineTxCategory((prev) => !prev);
+                      setCategoryError(null);
+                    }}
+                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                  >
+                    {showInlineTxCategory ? 'Cerrar' : '+ Nueva categoría'}
+                  </button>
+                </div>
                 <select
                   value={txCategory}
                   onChange={(e) => setTxCategory(e.target.value)}
@@ -963,6 +1201,29 @@ export const FinancesView: React.FC<FinancesViewProps> = ({
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+                {showInlineTxCategory && (
+                  <div className="mt-2 flex gap-1.5">
+                    <input
+                      type="text"
+                      value={inlineTxCategoryName}
+                      onChange={(e) => setInlineTxCategoryName(e.target.value)}
+                      placeholder="Nombre de la nueva categoría..."
+                      className="flex-1 bg-slate-100/80 dark:bg-black/40 border border-emerald-500/40 rounded-xl px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (handleCreateExpenseCategory(inlineTxCategoryName, true)) {
+                          setInlineTxCategoryName('');
+                          setShowInlineTxCategory(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer shrink-0"
+                    >
+                      Añadir
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>

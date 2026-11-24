@@ -9,6 +9,7 @@ import {
   TaskSubtask,
   TeamMember,
 } from '../../types';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   Building2,
   Plus,
@@ -39,7 +40,9 @@ import {
   CalendarDays,
   Columns3,
   Edit3,
+  NotebookPen,
 } from 'lucide-react';
+import { LinkedNotesPanel } from '../shared/LinkedNotesPanel';
 
 interface BusinessViewProps {
   data: AppStoreData;
@@ -47,6 +50,7 @@ interface BusinessViewProps {
   onOpenQuickCapture: () => void;
   initialFocusTaskId?: string | null;
   onClearInitialFocusTask?: () => void;
+  onOpenPersonalNote?: (noteId: string) => void;
 }
 
 const PRIORITY_BADGE: Record<BusinessTask['priority'], { label: string; cls: string }> = {
@@ -80,6 +84,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
   onUpdateData,
   initialFocusTaskId,
   onClearInitialFocusTask,
+  onOpenPersonalNote,
 }) => {
   const [selectedBusinessId, setSelectedBusinessId] = useState<string>(
     data.businesses[0]?.id || ''
@@ -391,16 +396,20 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
       ]
         .filter(Boolean)
         .join(' | ');
-      const resp = await fetch('/api/integrations/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: 'business_delegation',
-          sender: assignee?.email || assignee?.name || currentBusiness?.name || 'empresa',
-          text: payloadText,
-        }),
-      });
-      if (resp.ok) {
+      const { ok } = await fetchJsonWithTimeout<any>(
+        '/api/integrations/webhook',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            channel: 'business_delegation',
+            sender: assignee?.email || assignee?.name || currentBusiness?.name || 'empresa',
+            text: payloadText,
+          }),
+        },
+        20000
+      );
+      if (ok) {
         notify(`Tarea "${task.title}" enviada al puente externo (WhatsApp/Slack/n8n).`);
       } else {
         notify('No se pudo despachar al puente externo.');
@@ -417,23 +426,26 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
     setShowOkrAiPanel(true);
     setIsLoadingOkrAi(true);
     try {
-      const resp = await fetch('/api/gemini/suggest-okrs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businessName: currentBusiness.name,
-          sector: currentBusiness.sector,
-          revenueTarget: currentBusiness.revenueTarget,
-          actualRevenue: currentBusiness.actualRevenue,
-          currentProjects: businessProjects.map((p) => ({
-            name: p.name,
-            status: p.status,
-            progressPercent: calculateWeightedProjectProgress(p, businessTasks),
-          })),
-        }),
-      });
-      const dataJson = await resp.json();
-      setOkrSuggestions(Array.isArray(dataJson.suggestions) ? dataJson.suggestions : []);
+      const { ok, data: dataJson } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/suggest-okrs',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: currentBusiness.name,
+            sector: currentBusiness.sector,
+            revenueTarget: currentBusiness.revenueTarget,
+            actualRevenue: currentBusiness.actualRevenue,
+            currentProjects: businessProjects.map((p) => ({
+              name: p.name,
+              status: p.status,
+              progressPercent: calculateWeightedProjectProgress(p, businessTasks),
+            })),
+          }),
+        },
+        60000
+      );
+      setOkrSuggestions(ok && Array.isArray(dataJson.suggestions) ? dataJson.suggestions : []);
     } catch {
       notify('No se pudo consultar al Asistente IA de KPIs & OKRs.');
     } finally {
@@ -921,13 +933,13 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
         onClick={() => openTaskModal(t)}
         className={`p-3 rounded-xl border shadow-xs text-xs space-y-2 transition-all cursor-pointer group ${
           t.status === 'done'
-            ? 'bg-slate-50/80 dark:bg-black/20 border-slate-200/60 dark:border-white/[0.04] opacity-75 hover:border-blue-400/50'
-            : 'bg-white dark:bg-slate-800/80 border-slate-200/90 dark:border-white/[0.08] hover:border-blue-500/50 hover:shadow-md'
+            ? 'bg-slate-50/80 dark:bg-black/20 border-slate-200/60 dark:border-white/[0.04] opacity-75 hover:border-rose-500/50'
+            : 'bg-white dark:bg-slate-800/80 border-slate-200/90 dark:border-white/[0.08] hover:border-rose-600/50 hover:shadow-md'
         }`}
       >
         <div className="flex items-start justify-between gap-2">
           <p
-            className={`font-semibold leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors ${
+            className={`font-semibold leading-snug group-hover:text-rose-700 dark:group-hover:text-rose-300 transition-colors ${
               t.status === 'done'
                 ? 'line-through text-slate-400'
                 : 'text-slate-900 dark:text-white'
@@ -939,7 +951,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
             <button
               type="button"
               onClick={() => openTaskModal(t)}
-              className="text-slate-400 hover:text-blue-500 p-0.5 cursor-pointer"
+              className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
               title="Abrir configuración completa + subtareas"
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -970,6 +982,32 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
               {assignee.name.split(' ')[0]}
             </span>
           )}
+          {(() => {
+            const taskLinkedNotes = (data.personalNotes || []).filter((n) =>
+              (n.linkedTaskIds || []).includes(t.id)
+            );
+            if (taskLinkedNotes.length === 0) return null;
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (taskLinkedNotes.length === 1 && onOpenPersonalNote) {
+                    onOpenPersonalNote(taskLinkedNotes[0].id);
+                  } else {
+                    openTaskModal(t);
+                  }
+                }}
+                title="Abrir nota enlazada"
+                className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/12 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25 cursor-pointer"
+              >
+                <NotebookPen className="w-2.5 h-2.5" />
+                <span>
+                  {taskLinkedNotes.length} {taskLinkedNotes.length === 1 ? 'nota' : 'notas'}
+                </span>
+              </button>
+            );
+          })()}
         </div>
 
         {/* Optional Description & Resource Link */}
@@ -1103,7 +1141,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                       : 'done'
                   )
                 }
-                className="px-2 py-0.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5 cursor-pointer"
+                className="px-2 py-0.5 rounded-lg bg-rose-700/10 hover:bg-rose-700/20 text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-0.5 cursor-pointer"
               >
                 <span>
                   {t.status === 'inbox'
@@ -1127,12 +1165,12 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
       <div className="p-6 rounded-3xl backdrop-blur-2xl bg-white/75 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/[0.08] shadow-lg dark:shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 shrink-0 text-xl font-bold">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-700 via-red-700 to-rose-900 flex items-center justify-center text-white shadow-lg shadow-rose-800/30 shrink-0 text-xl font-bold">
               {currentBusiness?.logoEmoji || <Building2 className="w-6 h-6 stroke-[2.2]" />}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-500/15 px-2.5 py-0.5 rounded-xl border border-blue-500/30">
+                <span className="text-xs font-semibold text-rose-800 dark:text-rose-300 bg-rose-700/15 px-2.5 py-0.5 rounded-xl border border-rose-600/30">
                   Ecosistema Multi-Empresa
                 </span>
                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -1159,7 +1197,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                 }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
                   biz.id === currentBusiness?.id
-                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25'
+                    ? 'bg-gradient-to-r from-rose-700 via-red-700 to-rose-800 text-white shadow-md shadow-rose-800/25'
                     : 'bg-slate-100/80 dark:bg-white/[0.06] text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200/80 dark:border-white/[0.08]'
                 }`}
               >
@@ -1170,7 +1208,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
 
             <button
               onClick={() => setShowAddBiz(true)}
-              className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/25 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-rose-700/10 hover:bg-rose-700/20 text-rose-700 dark:text-rose-300 border border-rose-600/25 transition-colors cursor-pointer"
               title="Crear Nueva Empresa"
             >
               <Plus className="w-4 h-4" />
@@ -1179,7 +1217,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
         </div>
 
         {toast && (
-          <div className="mt-4 px-4 py-2 rounded-xl bg-blue-500/15 border border-blue-500/30 text-xs font-semibold text-blue-700 dark:text-blue-300">
+          <div className="mt-4 px-4 py-2 rounded-xl bg-rose-700/15 border border-rose-600/30 text-xs font-semibold text-rose-800 dark:text-rose-300">
             {toast}
           </div>
         )}
@@ -1216,7 +1254,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs rounded-xl cursor-pointer"
+              className="px-4 py-2 bg-gradient-to-r from-rose-700 to-red-700 text-white font-bold text-xs rounded-xl cursor-pointer"
             >
               Registrar Negocio
             </button>
@@ -1237,7 +1275,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">
             Ingresos Actuales
           </span>
-          <span className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1 block tracking-tight tabular-nums">
+          <span className="text-2xl font-extrabold text-rose-700 dark:text-rose-400 mt-1 block tracking-tight tabular-nums">
             ${currentBusiness?.actualRevenue.toLocaleString()}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 block">
@@ -1332,7 +1370,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
               </div>
               <button
                 onClick={() => setShowAddProject(!showAddProject)}
-                className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 bg-gradient-to-r from-rose-700 to-red-700 hover:from-rose-600 hover:to-red-600 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-800/20 flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Nuevo Proyecto</span>
@@ -1377,7 +1415,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                 <div className="flex justify-end gap-2">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs rounded-xl cursor-pointer"
+                    className="px-4 py-2 bg-gradient-to-r from-rose-700 to-red-700 text-white font-bold text-xs rounded-xl cursor-pointer"
                   >
                     Crear Proyecto
                   </button>
@@ -1399,8 +1437,8 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                     onClick={() => handleSelectProjectForKanban(proj.id)}
                     className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-500/[0.08] dark:bg-blue-950/30 border-blue-500/60 ring-2 ring-blue-500/20 shadow-md'
-                        : 'bg-slate-50/90 dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] hover:border-blue-500/40'
+                        ? 'bg-rose-700/[0.08] dark:bg-rose-950/35 border-rose-600/60 ring-2 ring-rose-600/20 shadow-md'
+                        : 'bg-slate-50/90 dark:bg-black/30 border-slate-200/90 dark:border-white/[0.06] hover:border-rose-600/40'
                     }`}
                   >
                     <div>
@@ -1468,7 +1506,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                           )}
                         </select>
 
-                        <span className="text-xs text-blue-600 dark:text-blue-400 font-extrabold tabular-nums">
+                        <span className="text-xs text-rose-700 dark:text-rose-400 font-extrabold tabular-nums">
                           {computedPct}%
                         </span>
                       </div>
@@ -1478,7 +1516,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                           className={`h-full rounded-full transition-all duration-300 ${
                             computedPct === 100
                               ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                              : 'bg-gradient-to-r from-blue-600 to-indigo-500'
+                              : 'bg-gradient-to-r from-rose-700 to-red-600'
                           }`}
                           style={{ width: `${computedPct}%` }}
                         />
@@ -1490,14 +1528,28 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                             ? `${projDoneTasks}/${projTasks.length} listas${projInProgTasks > 0 ? ` · ${projInProgTasks} en curso` : ''}`
                             : `Sin tareas · Fin ${proj.deadline}`}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectProjectForKanban(proj.id)}
-                          className="font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <span>{isSelected ? 'Kanban Activo' : 'Abrir Kanban'}</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const projNotesCount = (data.personalNotes || []).filter((n) =>
+                              (n.linkedProjectIds || []).includes(proj.id)
+                            ).length;
+                            if (projNotesCount === 0) return null;
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-600 dark:text-violet-400">
+                                <NotebookPen className="w-3 h-3" />
+                                {projNotesCount}
+                              </span>
+                            );
+                          })()}
+                          <button
+                            type="button"
+                            onClick={() => handleSelectProjectForKanban(proj.id)}
+                            className="font-bold text-rose-700 dark:text-rose-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                          >
+                            <span>{isSelected ? 'Kanban Activo' : 'Abrir Kanban'}</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1514,14 +1566,14 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-200/80 dark:border-white/[0.06]">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <FolderKanban className="w-4 h-4 text-blue-500" />
+                  <FolderKanban className="w-4 h-4 text-rose-700 dark:text-rose-400" />
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     {activeProject
                       ? `Tablero Kanban: ${activeProject.name}`
                       : `Tablero Kanban de ${currentBusiness?.name}`}
                   </h3>
                   {activeProject && (
-                    <span className="text-xs font-extrabold text-blue-700 dark:text-blue-300 bg-blue-500/15 px-2.5 py-0.5 rounded-lg border border-blue-500/30 tabular-nums">
+                    <span className="text-xs font-extrabold text-rose-800 dark:text-rose-300 bg-rose-700/15 px-2.5 py-0.5 rounded-lg border border-rose-600/30 tabular-nums">
                       {calculateWeightedProjectProgress(activeProject, businessTasks)}% / 100%
                     </span>
                   )}
@@ -1542,7 +1594,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                     onClick={() => setBoardViewMode('kanban')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
                       boardViewMode === 'kanban'
-                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 shadow-xs'
+                        ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -1554,7 +1606,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                     onClick={() => setBoardViewMode('week')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
                       boardViewMode === 'week'
-                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 shadow-xs'
+                        ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -1566,7 +1618,7 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                     onClick={() => setBoardViewMode('month')}
                     className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
                       boardViewMode === 'month'
-                        ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-300 shadow-xs'
+                        ? 'bg-white dark:bg-slate-800 text-rose-700 dark:text-rose-300 shadow-xs'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
@@ -1630,6 +1682,20 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                 </button>
               </div>
             </div>
+
+            {(activeProject || currentBusiness) && (
+              <div className="mb-4">
+                <LinkedNotesPanel
+                  entityType={activeProject ? 'project' : 'business'}
+                  entityId={activeProject ? activeProject.id : currentBusiness!.id}
+                  entityLabel={activeProject ? activeProject.name : currentBusiness!.name}
+                  data={data}
+                  onUpdateData={onUpdateData}
+                  onOpenNote={onOpenPersonalNote}
+                  compact
+                />
+              </div>
+            )}
 
             {/* Wide Full Task Configuration + Subtasks Modal (Create or Edit/Inspect existing task) */}
             {showFullTaskModal &&
@@ -1942,6 +2008,21 @@ export const BusinessView: React.FC<BusinessViewProps> = ({
                       </div>
                     )}
                   </div>
+
+                  {editingTaskId && (
+                    <LinkedNotesPanel
+                      entityType="task"
+                      entityId={editingTaskId}
+                      entityLabel={newTaskTitle || 'Tarea de Negocio'}
+                      data={data}
+                      onUpdateData={onUpdateData}
+                      onOpenNote={(noteId) => {
+                        setShowFullTaskModal(false);
+                        onOpenPersonalNote?.(noteId);
+                      }}
+                      compact
+                    />
+                  )}
 
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-white/[0.06]">
                     <div className="flex items-center gap-2">

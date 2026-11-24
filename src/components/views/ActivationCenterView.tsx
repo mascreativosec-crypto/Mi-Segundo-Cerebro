@@ -44,20 +44,20 @@ const SYSTEM_MODULES: {
   color: string;
   origin: ReminderOriginModule;
 }[] = [
-  { id: 'mi_dia', label: 'Mi Día', icon: Compass, color: 'text-emerald-500', origin: 'sistema' },
+  { id: 'mi_dia', label: 'Mi Día', icon: Compass, color: 'text-sky-500', origin: 'sistema' },
   { id: 'super_morning', label: 'Súper Mañana', icon: Sun, color: 'text-amber-500', origin: 'super_manana' },
   { id: 'super_night', label: 'Súper Noche', icon: Moon, color: 'text-indigo-500', origin: 'super_noche' },
-  { id: 'mindset', label: 'Mentalidad & IA Coach', icon: Flame, color: 'text-orange-500', origin: 'sistema' },
+  { id: 'mindset', label: 'Mentalidad & IA Coach', icon: Flame, color: 'text-cyan-500', origin: 'sistema' },
   { id: 'physical_trainer', label: 'Mi Entrenador Físico', icon: Dumbbell, color: 'text-lime-500', origin: 'fisico' },
-  { id: 'tasks_general', label: 'Gestión de Tareas', icon: CheckSquare, color: 'text-teal-500', origin: 'personal' },
+  { id: 'tasks_general', label: 'Gestión de Tareas', icon: CheckSquare, color: 'text-orange-500', origin: 'personal' },
   { id: 'personal_finances', label: 'Finanzas Personales', icon: DollarSign, color: 'text-emerald-500', origin: 'finanzas' },
-  { id: 'business', label: 'Multi-Negocio & Proyectos', icon: Building2, color: 'text-blue-500', origin: 'business' },
-  { id: 'strategy', label: 'Dirección & Estrategia', icon: Layers, color: 'text-indigo-500', origin: 'business' },
+  { id: 'business', label: 'Multi-Negocio & Proyectos', icon: Building2, color: 'text-rose-700', origin: 'business' },
+  { id: 'personal_notes', label: 'Notas Generales & Bitácora', icon: Layers, color: 'text-violet-600', origin: 'personal' },
   { id: 'wisdom_library', label: 'Biblioteca de Sabiduría', icon: BookOpen, color: 'text-yellow-500', origin: 'sabiduria' },
-  { id: 'second_brain', label: 'Segundo Cerebro & Recordatorios', icon: Brain, color: 'text-violet-500', origin: 'sistema' },
-  { id: 'personal', label: 'Personal (Rituales)', icon: Heart, color: 'text-rose-500', origin: 'personal' },
-  { id: 'habits_goals', label: 'Hábitos & Metas', icon: Sparkles, color: 'text-rose-500', origin: 'personal' },
-  { id: 'ai_assistant', label: 'Asistente IA del Sistema', icon: Bot, color: 'text-cyan-500', origin: 'sistema' },
+  { id: 'second_brain', label: 'Segundo Cerebro & Recordatorios', icon: Brain, color: 'text-purple-500', origin: 'sistema' },
+  { id: 'personal', label: 'Personal (Rituales)', icon: Heart, color: 'text-pink-500', origin: 'personal' },
+  { id: 'habits_goals', label: 'Hábitos & Metas', icon: Sparkles, color: 'text-red-500', origin: 'personal' },
+  { id: 'ai_assistant', label: 'Asistente IA del Sistema', icon: Bot, color: 'text-fuchsia-500', origin: 'sistema' },
 ];
 
 const getModuleMeta = (viewId?: string) => {

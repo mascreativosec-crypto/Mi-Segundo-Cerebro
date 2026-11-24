@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ISuperMorningRoutine } from '../../types';
+import { BookItem, ISuperMorningRoutine, ReadingGoalState } from '../../types';
 import {
   SuperMorningHabit,
   RoutineMode,
@@ -12,12 +12,13 @@ import { GuidedSessionModal } from '../../components/super-manana/GuidedSessionM
 import { HabitBuilderView } from '../../components/super-manana/HabitBuilderView';
 import { ProgressView } from '../../components/super-manana/ProgressView';
 import { StreakRecoveryProtocolCard } from '../../components/shared/StreakRecoveryProtocolCard';
+import { formatReadingTimer, getLocalDateStr } from '../../utils/readingGoal';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 import {
   Sun,
   Play,
   Sliders,
   Calendar,
-  Moon,
   Sparkles,
   CheckCircle2,
   Circle,
@@ -28,6 +29,7 @@ import {
   BellPlus,
   Dumbbell,
   RefreshCw,
+  BookOpen,
 } from 'lucide-react';
 
 interface SuperMorningModuleProps {
@@ -37,6 +39,10 @@ interface SuperMorningModuleProps {
   onNavigateToSuperNight?: () => void;
   onNavigateToPhysicalTrainer?: () => void;
   onSendToReminders?: (title: string, content: string, category?: 'super_manana' | 'frase') => void;
+  books?: BookItem[];
+  readingGoal?: ReadingGoalState;
+  onOpenBookReader?: (bookId: string) => void;
+  onNavigateToLibrary?: () => void;
 }
 
 export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
@@ -44,6 +50,10 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
   onUpdate,
   onNavigateToPhysicalTrainer,
   onSendToReminders,
+  books = [],
+  readingGoal,
+  onOpenBookReader,
+  onNavigateToLibrary,
 }) => {
   const [activeTab, setActiveTab] = useState<'routine' | 'builder' | 'progress'>('routine');
   const [showGuidedModal, setShowGuidedModal] = useState(false);
@@ -51,6 +61,32 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
   const [reminderSavedBanner, setReminderSavedBanner] = useState<string | null>(null);
   const [aiQuotes, setAiQuotes] = useState<Record<string, string>>({});
   const [loadingAiQuoteId, setLoadingAiQuoteId] = useState<string | null>(null);
+  const [selectedMorningBookId, setSelectedMorningBookId] = useState<string>('');
+
+  const pdfBooks = useMemo(
+    () =>
+      books
+        .filter((b) => b.hasPdf)
+        .sort((a, b) => (b.lastReadAt || '').localeCompare(a.lastReadAt || '')),
+    [books]
+  );
+
+  const activeMorningBook = useMemo(() => {
+    if (selectedMorningBookId) {
+      const found = books.find((b) => b.id === selectedMorningBookId);
+      if (found) return found;
+    }
+    return pdfBooks[0] || books.find((b) => b.status === 'reading') || books[0] || null;
+  }, [books, pdfBooks, selectedMorningBookId]);
+
+  const todayLocalKey = getLocalDateStr();
+  const todayReadingSeconds = readingGoal?.dailySecondsByDate?.[todayLocalKey] || 0;
+  const readingTargetMinutes = Math.max(1, readingGoal?.dailyTargetMinutes || 15);
+  const readingGoalPercent = Math.min(
+    100,
+    Math.round((todayReadingSeconds / (readingTargetMinutes * 60)) * 100)
+  );
+  const isReadingGoalDone = todayReadingSeconds >= readingTargetMinutes * 60;
 
   // Initialize habits from state or default
   const habits: SuperMorningHabit[] = routine.customHabits && routine.customHabits.length > 0
@@ -183,20 +219,21 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
   const handleFetchHabitAiQuote = async (habit: SuperMorningHabit) => {
     setLoadingAiQuoteId(habit.id);
     try {
-      const res = await fetch('/api/gemini/habit-quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          habitTitle: habit.title,
-          topic: habit.aiMessageTopic || 'motivacion',
-          description: habit.description,
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.quote) {
-          setAiQuotes((prev) => ({ ...prev, [habit.id]: json.quote }));
-        }
+      const { ok, data: json } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/habit-quote',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            habitTitle: habit.title,
+            topic: habit.aiMessageTopic || 'motivacion',
+            description: habit.description,
+          }),
+        },
+        45000
+      );
+      if (ok && json.quote) {
+        setAiQuotes((prev) => ({ ...prev, [habit.id]: json.quote }));
       }
     } catch {
       // ignore network error
@@ -584,6 +621,134 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
               )}
             </div>
 
+            {/* Lectura Matutina conectada a Objetivos de Lectura & Hábitos - INSIDE Actividades de la Mañana */}
+            {onOpenBookReader && (
+              <div className="p-4 rounded-2xl bg-amber-500/[0.06] dark:bg-amber-500/[0.08] border border-amber-500/20 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                        Lectura Matutina · Conectada a tus Hábitos
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Lee tu libro aquí dentro de tu rutina: tu tiempo suma al objetivo diario y marca tu hábito automáticamente.
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold tabular-nums border self-start sm:self-center shrink-0 ${
+                      isReadingGoalDone
+                        ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300'
+                    }`}
+                  >
+                    {isReadingGoalDone ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Clock className="w-3.5 h-3.5 text-amber-500" />
+                    )}
+                    <span>
+                      {formatReadingTimer(todayReadingSeconds)} / {readingTargetMinutes} min hoy
+                    </span>
+                  </span>
+                </div>
+
+                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isReadingGoalDone
+                        ? 'bg-emerald-500'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-400'
+                    }`}
+                    style={{ width: `${readingGoalPercent}%` }}
+                  />
+                </div>
+
+                {activeMorningBook ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3 rounded-xl bg-white/80 dark:bg-black/35 border border-slate-200/80 dark:border-white/[0.06]">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 aspect-[2/3] rounded-lg overflow-hidden shadow-md border border-black/10 dark:border-white/10 shrink-0 bg-white dark:bg-slate-800">
+                        {activeMorningBook.coverImageDataUrl ? (
+                          <img
+                            src={activeMorningBook.coverImageDataUrl}
+                            alt={activeMorningBook.title}
+                            className="w-full h-full object-cover object-top"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-base">
+                            {activeMorningBook.coverEmoji || '📘'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h5 className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
+                          {activeMorningBook.title}
+                        </h5>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          {activeMorningBook.author} · Pág. {activeMorningBook.currentPage} / {activeMorningBook.totalPages}
+                        </p>
+                        {pdfBooks.length > 1 && (
+                          <select
+                            value={activeMorningBook.id}
+                            onChange={(e) => setSelectedMorningBookId(e.target.value)}
+                            className="mt-1 rounded-lg bg-white dark:bg-black/40 border border-slate-200 dark:border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 max-w-full"
+                          >
+                            {pdfBooks.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.title}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {activeMorningBook.hasPdf ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenBookReader(activeMorningBook.id)}
+                          className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer active:scale-95"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>Leer Libro Ahora</span>
+                        </button>
+                      ) : (
+                        onNavigateToLibrary && (
+                          <button
+                            type="button"
+                            onClick={onNavigateToLibrary}
+                            className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/35 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Cargar PDF en Biblioteca</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  onNavigateToLibrary && (
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-white/80 dark:bg-black/35 border border-slate-200/80 dark:border-white/[0.06]">
+                      <span className="text-xs text-slate-600 dark:text-slate-300">
+                        Sube tu primer libro PDF en la Biblioteca para leerlo aquí cada mañana.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onNavigateToLibrary}
+                        className="px-3.5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold cursor-pointer shrink-0"
+                      >
+                        Ir a Biblioteca
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
             <div className="space-y-2.5">
               {enabledHabits.map((habit, index) => {
                 const isDone = completedHabitIds.includes(habit.id);
@@ -749,6 +914,34 @@ export const SuperMorningModule: React.FC<SuperMorningModuleProps> = ({
                             </button>
                           </div>
                         )}
+
+                        {/* Reading Quick Launch for reading-related morning steps */}
+                        {onOpenBookReader &&
+                          activeMorningBook &&
+                          (habit.icon === 'BookOpen' ||
+                            /lectura|leer|libro/i.test(`${habit.title} ${habit.subtitle} ${habit.description}`)) && (
+                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs text-amber-900 dark:text-amber-200 font-medium">
+                                Abre tu libro directamente aquí y suma minutos a tu objetivo diario ({formatReadingTimer(todayReadingSeconds)} / {readingTargetMinutes} min).
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  activeMorningBook.hasPdf
+                                    ? onOpenBookReader(activeMorningBook.id)
+                                    : onNavigateToLibrary?.()
+                                }
+                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>
+                                  {activeMorningBook.hasPdf
+                                    ? `Leer "${activeMorningBook.title.slice(0, 22)}${activeMorningBook.title.length > 22 ? '…' : ''}"`
+                                    : 'Ir a Biblioteca'}
+                                </span>
+                              </button>
+                            </div>
+                          )}
 
                         <p className="text-xs text-slate-600 dark:text-slate-300">{habit.description}</p>
 

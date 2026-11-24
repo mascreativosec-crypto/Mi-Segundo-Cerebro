@@ -23,15 +23,21 @@ import { SecondBrainView } from './components/views/SecondBrainView';
 import { ActivationCenterView } from './components/views/ActivationCenterView';
 import { BackupSettingsView } from './components/views/BackupSettingsView';
 import { GeneralTasksView } from './components/views/GeneralTasksView';
-import { StrategyView, StrategyStudioAction } from './components/views/StrategyView';
+import { NotesStudioAction } from './types';
 import { HabitsAndGoalsView } from './components/views/HabitsAndGoalsView';
 import { PersonalExperimentsView } from './components/views/PersonalExperimentsView';
 import { AiAssistantView } from './components/views/AiAssistantView';
+import { PersonalNotesView } from './components/views/PersonalNotesView';
+import { LoginView } from './components/views/LoginView';
 import { SuperMorningModule } from './modules/super-morning/SuperMorningModule';
 import { SuperNightModule } from './modules/super-night/SuperNightModule';
 import { PersonalModule } from './modules/personal/PersonalModule';
 import { QuickCaptureModal } from './components/modals/QuickCaptureModal';
 import { NotificationsModal } from './components/modals/NotificationsModal';
+import { AppleBookReaderModal } from './components/modals/AppleBookReaderModal';
+import { ReminderToastBanner, ReminderToastPayload } from './components/shared/ReminderToastBanner';
+import { applyReadingSecondsToStore } from './utils/readingGoal';
+import { clearAuthToken, fetchJsonWithTimeout } from './utils/fetchWithTimeout';
 
 export default function App() {
   const [data, setData] = useState<AppStoreData>(() => StorageService.load());
@@ -42,9 +48,96 @@ export default function App() {
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState<boolean>(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const [financeInitialAction, setFinanceInitialAction] = useState<'add_tx' | null>(null);
-  const [strategyInitialAction, setStrategyInitialAction] = useState<StrategyStudioAction | null>(null);
+  const [notesStudioAction, setNotesStudioAction] = useState<NotesStudioAction | null>(null);
   const [businessFocusTaskId, setBusinessFocusTaskId] = useState<string | null>(null);
+  const [personalFocusTaskId, setPersonalFocusTaskId] = useState<string | null>(null);
+  const [focusedNoteId, setFocusedNoteId] = useState<string | null>(null);
+  const [readingBookId, setReadingBookId] = useState<string | null>(null);
+  const [backupToast, setBackupToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isNotesEditorFullscreen, setIsNotesEditorFullscreen] = useState<boolean>(false);
+  const [authState, setAuthState] = useState<{
+    checking: boolean;
+    configured: boolean;
+    authenticated: boolean;
+    username: string | null;
+  }>({
+    checking: true,
+    configured: false,
+    authenticated: false,
+    username: null,
+  });
   const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const checkSession = async () => {
+      try {
+        const { ok, data: statusData } = await fetchJsonWithTimeout<{
+          configured?: boolean;
+          authenticated?: boolean;
+          username?: string | null;
+          displayName?: string | null;
+        }>('/api/auth/status', { method: 'GET' }, 10000);
+        if (!active) return;
+        if (ok) {
+          const resolvedName = (statusData.displayName || statusData.username || '').trim();
+          if (statusData.authenticated && resolvedName) {
+            setData((prev) => {
+              if (prev.profile.name && prev.profile.name !== 'Director Ejecutivo') return prev;
+              const next = {
+                ...prev,
+                profile: { ...prev.profile, name: resolvedName },
+              };
+              StorageService.save(next);
+              return next;
+            });
+          }
+          setAuthState({
+            checking: false,
+            configured: Boolean(statusData.configured),
+            authenticated: Boolean(statusData.authenticated),
+            username: statusData.username || null,
+          });
+        } else {
+          setAuthState({
+            checking: false,
+            configured: true,
+            authenticated: false,
+            username: null,
+          });
+        }
+      } catch {
+        if (!active) return;
+        setAuthState({
+          checking: false,
+          configured: false,
+          authenticated: false,
+          username: null,
+        });
+      }
+    };
+    void checkSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetchJsonWithTimeout('/api/auth/logout', { method: 'POST' }, 8000);
+    } catch {
+      // ignore network failure during logout
+    } finally {
+      clearAuthToken();
+      setAuthState((prev) => ({
+        checking: false,
+        configured: true,
+        authenticated: false,
+        username: null,
+      }));
+    }
+  };
 
   // Apple Liquid Glass Theme State (dark vs light)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -96,9 +189,11 @@ export default function App() {
     try {
       const imported = await StorageService.importBackup(file);
       setData(imported);
-      alert('Respaldo restaurado con éxito.');
+      setBackupToast({ type: 'success', text: 'Respaldo restaurado y validado con éxito.' });
     } catch (err: any) {
-      alert(`Error al importar: ${err.message}`);
+      setBackupToast({ type: 'error', text: `Error al importar respaldo: ${err.message}` });
+    } finally {
+      setTimeout(() => setBackupToast(null), 4500);
     }
   };
 
@@ -121,12 +216,27 @@ export default function App() {
     setActiveView('personal_finances');
   };
 
+  const handleOpenPersonalNote = (noteId: string) => {
+    setFocusedNoteId(noteId);
+    setActiveView('personal_notes');
+  };
+
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, behavior: 'auto' });
     if (activeView !== 'mobile_modules') {
       setLastModuleView(activeView);
     }
+    if (activeView !== 'personal_notes') {
+      setIsNotesEditorFullscreen(false);
+      setIsSidebarCollapsed(false);
+    }
   }, [activeView]);
+
+  useEffect(() => {
+    if (activeView === 'personal_notes') {
+      setIsSidebarCollapsed(isNotesEditorFullscreen);
+    }
+  }, [activeView, isNotesEditorFullscreen]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -141,22 +251,31 @@ export default function App() {
   }, [activeView, lastModuleView]);
 
   const handleRecordStrategicMeeting = () => {
-    setStrategyInitialAction({ type: 'record' });
-    setActiveView('strategy');
+    setNotesStudioAction({ type: 'record' });
+    setActiveView('personal_notes');
   };
 
   const handleUploadStrategicAudio = (file: File) => {
+    const inferMime = (f: File) => {
+      if (f.type && f.type.startsWith('audio/')) return f.type.split(';')[0].trim();
+      const lower = f.name.toLowerCase();
+      if (lower.endsWith('.m4a') || lower.endsWith('.mp4') || lower.endsWith('.aac')) return 'audio/mp4';
+      if (lower.endsWith('.wav')) return 'audio/wav';
+      if (lower.endsWith('.ogg') || lower.endsWith('.opus')) return 'audio/ogg';
+      if (lower.endsWith('.webm')) return 'audio/webm';
+      return 'audio/mpeg';
+    };
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result as string;
       const base64 = result.includes(',') ? result.split(',')[1] : result;
-      setStrategyInitialAction({
+      setNotesStudioAction({
         type: 'upload',
         base64,
-        mimeType: file.type || 'audio/mp3',
+        mimeType: inferMime(file),
         fileName: file.name,
       });
-      setActiveView('strategy');
+      setActiveView('personal_notes');
       setIsMobileQuickActionOpen(false);
     };
     reader.readAsDataURL(file);
@@ -190,8 +309,50 @@ export default function App() {
     }));
   };
 
+  if (authState.checking) {
+    return (
+      <div className="min-h-[100dvh] bg-[#080b11] text-white flex flex-col items-center justify-center gap-3 px-4">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-rose-500 animate-pulse" />
+        <p className="text-xs font-semibold tracking-wide text-slate-300">
+          Verificando acceso a Mi Segundo Cerebro 4.0...
+        </p>
+      </div>
+    );
+  }
+
+  if (!authState.authenticated) {
+    return (
+      <LoginView
+        configured={authState.configured}
+        onAuthenticated={({ username, displayName }) => {
+          const resolvedName = (displayName || username || '').trim();
+          if (resolvedName) {
+            updateData((prev) => ({
+              ...prev,
+              profile: {
+                ...prev.profile,
+                name:
+                  displayName || prev.profile.name === 'Director Ejecutivo'
+                    ? resolvedName
+                    : prev.profile.name,
+              },
+            }));
+          }
+          setAuthState({
+            checking: false,
+            configured: true,
+            authenticated: true,
+            username,
+          });
+        }}
+      />
+    );
+  }
+
+  const isFullCanvasNotes = activeView === 'personal_notes' && isNotesEditorFullscreen;
+
   return (
-    <div className="h-[100dvh] overflow-hidden lg:h-auto lg:min-h-screen lg:overflow-visible bg-slate-100/60 dark:bg-[#070e0a]/80 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-600 dark:selection:text-blue-300 transition-colors duration-200">
+    <div className="h-[100dvh] overflow-hidden bg-slate-100/60 dark:bg-[#080b11]/90 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-500/30 selection:text-blue-600 dark:selection:text-blue-300 transition-colors duration-200">
       {/* Top Bar Contract Navigation */}
       <Navbar
         activeView={activeView}
@@ -202,8 +363,10 @@ export default function App() {
         notifications={data.notifications}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
         userName={data.profile.name}
+        userAvatar={data.profile.avatarDataUrl}
         theme={theme}
         onToggleTheme={handleToggleTheme}
+        onLogout={handleLogout}
         onOpenMobileMenu={() => {
           setIsMobileQuickActionOpen(false);
           setActiveView('mobile_modules');
@@ -211,17 +374,24 @@ export default function App() {
       />
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Sidebar Navigation (Desktop >= 1024px) */}
+        {/* Sidebar Navigation (Desktop >= 1024px — auto-minimizes in Notes for full-width canvas) */}
         <Sidebar
           activeView={activeView}
           onNavigate={setActiveView}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         />
 
-        {/* Main Content Area (Single native scroll container on mobile) */}
+        {/* Main Content Area (Single scroll container; Navbar & Sidebar remain fixed) */}
         <main
           ref={mainRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 pt-2.5 pb-20 md:px-6 md:pt-6 lg:p-8 max-w-7xl mx-auto w-full"
+          className={`flex-1 min-h-0 overflow-y-auto ${
+            isFullCanvasNotes
+              ? 'px-2 pt-2 pb-20 lg:p-3'
+              : 'px-3 pt-2.5 pb-20 md:px-6 md:pt-6 lg:p-8'
+          }`}
         >
+          <div className={isFullCanvasNotes ? 'w-full h-full' : 'max-w-7xl mx-auto w-full'}>
           {/* Views Router */}
           {activeView === 'mobile_modules' && (
             <MobileModulesView
@@ -231,8 +401,10 @@ export default function App() {
                 setActiveView(viewId);
               }}
               userName={data.profile.name}
+              userAvatar={data.profile.avatarDataUrl}
               onExportBackup={handleExportBackup}
               onImportBackup={handleImportBackup}
+              onLogout={handleLogout}
             />
           )}
 
@@ -268,10 +440,13 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+              initialFocusTaskId={personalFocusTaskId}
+              onClearInitialFocusTask={() => setPersonalFocusTaskId(null)}
               onOpenBusinessTaskKanban={(task) => {
                 setBusinessFocusTaskId(task.id);
                 setActiveView('business');
               }}
+              onOpenPersonalNote={handleOpenPersonalNote}
             />
           )}
 
@@ -280,6 +455,19 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
+            />
+          )}
+
+          {activeView === 'personal_notes' && (
+            <PersonalNotesView
+              data={data}
+              onUpdateData={updateData}
+              onNavigate={setActiveView}
+              initialNoteId={focusedNoteId}
+              onClearInitialNoteId={() => setFocusedNoteId(null)}
+              initialStudioAction={notesStudioAction}
+              onClearInitialStudioAction={() => setNotesStudioAction(null)}
+              onEditorFullscreenChange={setIsNotesEditorFullscreen}
             />
           )}
 
@@ -296,6 +484,7 @@ export default function App() {
               data={data}
               onUpdateData={updateData}
               onNavigate={setActiveView}
+              onOpenPersonalNote={handleOpenPersonalNote}
             />
           )}
 
@@ -309,6 +498,10 @@ export default function App() {
               onNavigateToSuperNight={() => setActiveView('super_night')}
               onNavigateToPhysicalTrainer={() => setActiveView('physical_trainer')}
               onSendToReminders={handleSendMorningToReminders}
+              books={data.books}
+              readingGoal={data.readingGoal}
+              onOpenBookReader={(bookId) => setReadingBookId(bookId)}
+              onNavigateToLibrary={() => setActiveView('wisdom_library')}
             />
           )}
 
@@ -349,15 +542,7 @@ export default function App() {
               onOpenQuickCapture={() => setIsQuickCaptureOpen(true)}
               initialFocusTaskId={businessFocusTaskId}
               onClearInitialFocusTask={() => setBusinessFocusTaskId(null)}
-            />
-          )}
-
-          {activeView === 'strategy' && (
-            <StrategyView
-              data={data}
-              onUpdateData={updateData}
-              initialStudioAction={strategyInitialAction}
-              onClearInitialStudioAction={() => setStrategyInitialAction(null)}
+              onOpenPersonalNote={handleOpenPersonalNote}
             />
           )}
 
@@ -372,6 +557,7 @@ export default function App() {
             <WisdomLibraryView
               data={data}
               onUpdateData={updateData}
+              onOpenBookReader={(bookId) => setReadingBookId(bookId)}
             />
           )}
 
@@ -432,6 +618,7 @@ export default function App() {
               onImportBackup={handleImportBackup}
             />
           )}
+          </div>
         </main>
       </div>
 
@@ -449,6 +636,29 @@ export default function App() {
         notifications={data.notifications}
         onMarkAllAsRead={markAllNotificationsRead}
         onClearNotifications={clearAllNotifications}
+      />
+
+      {/* Shared Apple Books Fullscreen PDF Reader (accessible from Biblioteca & Súper Mañana) */}
+      <AppleBookReaderModal
+        book={readingBookId ? data.books.find((b) => b.id === readingBookId) || null : null}
+        onClose={() => setReadingBookId(null)}
+        onUpdateBook={(bookId, updater) =>
+          updateData((prev) => ({
+            ...prev,
+            books: prev.books.map((b) => (b.id === bookId ? updater(b) : b)),
+          }))
+        }
+        onAddWisdomCapsule={(capsule) =>
+          updateData((prev) => ({
+            ...prev,
+            wisdomCapsules: [capsule, ...prev.wisdomCapsules],
+          }))
+        }
+        readingGoal={data.readingGoal}
+        onTrackReadingSeconds={(deltaSeconds) =>
+          updateData((prev) => applyReadingSecondsToStore(prev, deltaSeconds))
+        }
+        backLabel={activeView === 'super_morning' ? 'Súper Mañana' : 'Biblioteca'}
       />
 
       {/* Mobile (+) Quick Action Sheet: Grabar Junta / Subir Audio / Captura Rápida */}
@@ -476,6 +686,37 @@ export default function App() {
         }}
         isQuickActionOpen={isMobileQuickActionOpen}
       />
+      {/* Top Reminder Toast Banner with Soft Alert Sound & Smart Routing */}
+      <ReminderToastBanner
+        data={data}
+        onUpdateData={updateData}
+        onSelectToast={(toast: ReminderToastPayload) => {
+          if (toast.kind === 'business_task' && toast.linkedTaskId) {
+            setBusinessFocusTaskId(toast.linkedTaskId);
+            setActiveView('business');
+            return;
+          }
+          if (toast.kind === 'personal_task' && toast.linkedTaskId) {
+            setPersonalFocusTaskId(toast.linkedTaskId);
+            setActiveView('tasks_general');
+            return;
+          }
+          setActiveView(toast.targetView || 'second_brain');
+        }}
+      />
+
+      {/* Inline Backup Toast Banner */}
+      {backupToast && (
+        <div
+          className={`fixed top-20 right-4 z-[95] px-4 py-2.5 rounded-2xl text-xs font-bold shadow-xl border backdrop-blur-xl ${
+            backupToast.type === 'success'
+              ? 'bg-emerald-500/90 border-emerald-400/50 text-white'
+              : 'bg-rose-600/95 border-rose-400/50 text-white'
+          }`}
+        >
+          {backupToast.text}
+        </div>
+      )}
     </div>
   );
 }

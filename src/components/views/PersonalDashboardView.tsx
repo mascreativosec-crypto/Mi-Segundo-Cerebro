@@ -21,6 +21,7 @@ import {
   Send,
 } from 'lucide-react';
 import { MobileCollapsibleCard } from '../shared/MobileCollapsibleCard';
+import { fetchJsonWithTimeout } from '../../utils/fetchWithTimeout';
 
 interface PersonalDashboardViewProps {
   data: AppStoreData;
@@ -172,8 +173,8 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
         id: 'exec',
         label: 'Ejecución & Hábitos',
         score: executionScore,
-        color: 'bg-blue-500',
-        textColor: 'text-blue-600 dark:text-blue-400',
+        color: 'bg-orange-500',
+        textColor: 'text-orange-600 dark:text-orange-400',
         targetView: 'tasks_general',
         detail: `${completedHabitsToday}/${activeHabits.length} hábitos hoy · ${overdueTasks.length} vencidas`,
       },
@@ -190,8 +191,8 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
         id: 'phys',
         label: 'Salud & Físico',
         score: physicalScore,
-        color: 'bg-lime-500',
-        textColor: 'text-lime-600 dark:text-lime-400',
+        color: 'bg-cyan-500',
+        textColor: 'text-cyan-600 dark:text-cyan-400',
         targetView: 'physical_trainer',
         detail: `IMC ${bmi} · ${todaySteps.toLocaleString()} pasos · ${waterGlasses} vasos`,
       },
@@ -208,8 +209,8 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
         id: 'biz',
         label: 'Empresarial & OKRs',
         score: businessScore,
-        color: 'bg-indigo-500',
-        textColor: 'text-indigo-600 dark:text-indigo-400',
+        color: 'bg-rose-700',
+        textColor: 'text-rose-700 dark:text-rose-400',
         targetView: 'business',
         detail: `${avgGoalProgress}% metas · ${allOpenTasks.filter((t) => t.scope === 'business').length} tareas activas`,
       },
@@ -327,16 +328,19 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
       : `Analiza mi estado real actual: Score Global ${metrics.totalGrowthScore}/500, Índice de Enfoque Hoy ${metrics.focusRatioPct}%, Área más débil: ${metrics.weakestDimension.label} (${metrics.weakestDimension.score}% - ${metrics.weakestDimension.detail}), Tareas vencidas: ${metrics.overdueTasksCount}, IMC: ${data.profile.calculatedBmi}. Dame un consejo ejecutivo directo de máximo 50 palabras señalando qué corregir hoy.`;
 
     try {
-      const resp = await fetch('/api/gemini/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptToSend,
-          pillarData: metrics.realPillars,
-        }),
-      });
-      const result = await resp.json();
-      if (result.response) {
+      const { ok, data: result } = await fetchJsonWithTimeout<any>(
+        '/api/gemini/advisor',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: promptToSend,
+            pillarData: metrics.realPillars,
+          }),
+        },
+        45000
+      );
+      if (ok && result.response) {
         setAiAdvice(result.response);
       }
       if (cleanQuestion) setAiPromptInput('');
@@ -397,16 +401,16 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
             title="AI Co-pilot Estratégico"
             summary={`Score ${metrics.totalGrowthScore}/500 · Diagnóstico y consulta IA`}
             icon={
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-fuchsia-600 to-pink-600 flex items-center justify-center text-white">
                 <Sparkles className="w-4 h-4" />
               </div>
             }
             defaultOpenMobile={false}
           >
-            <div className="h-full p-4 lg:p-6 rounded-none lg:rounded-3xl lg:backdrop-blur-2xl lg:bg-white/75 lg:dark:bg-slate-900/60 lg:border lg:border-cyan-500/25 lg:shadow-lg lg:dark:shadow-2xl flex flex-col justify-between gap-3.5 lg:gap-4">
+            <div className="h-full p-4 lg:p-6 rounded-none lg:rounded-3xl lg:backdrop-blur-2xl lg:bg-white/75 lg:dark:bg-slate-900/60 lg:border lg:border-fuchsia-500/25 lg:shadow-lg lg:dark:shadow-2xl flex flex-col justify-between gap-3.5 lg:gap-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-cyan-500" />
+                  <Sparkles className="w-4 h-4 text-fuchsia-500" />
                   <h2 className="text-base font-bold text-slate-900 dark:text-white">
                     AI Co-pilot Estratégico
                   </h2>
@@ -417,7 +421,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                     type="button"
                     onClick={() => handleRefreshAiCopilot()}
                     disabled={isLoadingAi}
-                    className="text-xs font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-3 py-1.5 rounded-xl border border-cyan-500/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="text-xs font-bold text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 px-3 py-1.5 rounded-xl border border-fuchsia-500/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAi ? 'animate-spin' : ''}`} />
                     <span>{isLoadingAi ? 'Analizando...' : 'Diagnóstico IA'}</span>
@@ -426,7 +430,7 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                   <button
                     type="button"
                     onClick={() => onNavigate('ai_assistant')}
-                    className="px-3 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-700 dark:text-blue-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                    className="px-3 py-1.5 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/30 text-fuchsia-700 dark:text-fuchsia-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                   >
                     Abrir Asistente
                   </button>
@@ -449,12 +453,12 @@ export const PersonalDashboardView: React.FC<PersonalDashboardViewProps> = ({
                   value={aiPromptInput}
                   onChange={(e) => setAiPromptInput(e.target.value)}
                   placeholder="Escríbele al Co-pilot (ej: ¿Cómo subo mi pilar físico esta semana?)"
-                  className="flex-1 bg-slate-100/90 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
+                  className="flex-1 bg-slate-100/90 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-fuchsia-500"
                 />
                 <button
                   type="submit"
                   disabled={isLoadingAi || !aiPromptInput.trim()}
-                  className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Consultar</span>

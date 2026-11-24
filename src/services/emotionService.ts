@@ -1,3 +1,5 @@
+import { fetchJsonWithTimeout } from '../utils/fetchWithTimeout';
+
 export interface EmotionLogPayload {
   timestamp: string;
   valence_score: number;
@@ -17,15 +19,19 @@ export async function submitEmotionLog(
   payload: EmotionLogPayload
 ): Promise<EmotionLogResponse> {
   try {
-    const response = await fetch('/api/emotions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    const { ok, status, data } = await fetchJsonWithTimeout<EmotionLogResponse>(
+      '/api/emotions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      15000
+    );
+    if (!ok) {
+      throw new Error(`HTTP ${status}`);
     }
-    return (await response.json()) as EmotionLogResponse;
+    return data;
   } catch {
     // Fallback guarantees local persistence never blocks even if backend is offline
     return { ok: true, saved: payload };
